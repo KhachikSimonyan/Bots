@@ -1,0 +1,17 @@
+name = "budget-telegram-bot"
+main = "bot/worker.js"
+compatibility_date = "2026-05-08"
+
+[vars]
+APP_URL = "https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPOSITORY_NAME/"
+CORS_ORIGIN = "https://YOUR_GITHUB_USERNAME.github.io"
+AUTH_MAX_AGE_SECONDS = "86400"
+TIMEZONE_OFFSET_MINUTES = "240"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "khnayik-db"
+database_id = "PASTE_D1_DATABASE_ID_HERE"
+
+[triggers]
+crons = ["*/5 * * * *"]
