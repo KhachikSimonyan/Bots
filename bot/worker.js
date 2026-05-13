@@ -388,12 +388,13 @@ function json(data, status = 200) {
   });
 }
 
-function withCors(response, env) {
+function withCors(response) {
   const headers = new Headers(response.headers);
 
-  headers.set("Access-Control-Allow-Origin", env.CORS_ORIGIN || "*");
+  headers.set("Access-Control-Allow-Origin", "*");
   headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type,X-Telegram-Init-Data");
+  headers.set("Access-Control-Allow-Headers", "*");
+  headers.set("Access-Control-Max-Age", "86400");
 
   return new Response(response.body, {
     status: response.status,
@@ -401,7 +402,6 @@ function withCors(response, env) {
     headers,
   });
 }
-
 function getDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
