@@ -615,8 +615,8 @@ async function syncFromCloud() {
       hasUnsavedCloudChanges = false;
       render();
     }
-  } catch {
-    renderSyncStatus("Database կապ չկա");
+  } catch (error) {
+    renderSyncStatus(getApiErrorText(error, "Database կապ չկա"));
   }
 }
 
@@ -647,7 +647,7 @@ async function saveCloudState() {
       render();
       return;
     }
-    renderSyncStatus("Database պահպանումը չստացվեց");
+    renderSyncStatus(getApiErrorText(error, "Database պահպանումը չստացվեց"));
   }
 }
 
@@ -660,8 +660,8 @@ async function refreshCloudState() {
     lastCloudUpdatedAt = data.updatedAt;
     isCloudReady = true;
     render();
-  } catch {
-    renderSyncStatus("Database կապը ժամանակավոր չկա");
+  } catch (error) {
+    renderSyncStatus(getApiErrorText(error, "Database կապը ժամանակավոր չկա"));
   }
 }
 
@@ -684,6 +684,12 @@ async function api(path, options = {}) {
     throw error;
   }
   return response.json();
+}
+
+function getApiErrorText(error, fallback) {
+  if (error?.data?.error) return error.data.error;
+  if (error?.message) return error.message;
+  return fallback;
 }
 
 function saveState() {
