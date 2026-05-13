@@ -3,9 +3,9 @@ main = "bot/worker.js"
 compatibility_date = "2026-05-08"
 
 [vars]
-APP_URL ="https://khachiksimonyan.github.io/Bots/"
+APP_URL = "https://khachiksimonyan.github.io/Bots/"
 CORS_ORIGIN = "https://khachiksimonyan.github.io"
-AUTH_MAX_AGE_SECONDS = "86400"
+AUTH_MAX_AGE_SECONDS = "2592000"
 TIMEZONE_OFFSET_MINUTES = "240"
 
 [[d1_databases]]
