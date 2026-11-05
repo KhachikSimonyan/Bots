@@ -17,14 +17,14 @@
         <div>
           <p class="eyebrow" id="appEyebrow">Իմ բյուջեն</p>
           <h1 id="greeting">Բարի օր</h1>
-          <small class="sync-status" id="syncStatus">Պահվում է սարքի մեջ</small>
+          <small class="sync-status" id="syncStatus" role="status">Պահվում է սարքի մեջ</small>
         </div>
         <button class="icon-button" id="menuBtn" type="button" aria-label="Կարգավորումներ" title="Կարգավորումներ">
           <span>⋮</span>
         </button>
       </section>
 
-      <section class="app-switch" aria-label="App sections">
+      <section class="app-switch" aria-label="Հավելվածի բաժիններ">
         <button class="switch-button is-active" data-view="budget" type="button">Բյուջե</button>
         <button class="switch-button" data-view="tasks" type="button">Գործեր</button>
         <button class="switch-button" data-view="months" type="button">Ամիսներ</button>
@@ -37,7 +37,7 @@
           <strong id="freeMoney">֏0</strong>
           <small id="budgetHint">Ավելացրեք աշխատավարձը և ֆիքսված ծախսերը</small>
         </div>
-        <div class="progress-ring" aria-label="Budget usage">
+        <div class="progress-ring" aria-label="Բյուջեի օգտագործում">
           <svg viewBox="0 0 120 120">
             <circle class="track" cx="60" cy="60" r="52"></circle>
             <circle class="meter" id="budgetMeter" cx="60" cy="60" r="52"></circle>
@@ -46,7 +46,7 @@
         </div>
       </section>
 
-      <section class="tabs" aria-label="Expense period">
+      <section class="tabs" aria-label="Ծախսերի ժամանակահատված">
         <button class="tab is-active" data-period="day" type="button">Օր</button>
         <button class="tab" data-period="week" type="button">Շաբաթ</button>
         <button class="tab" data-period="month" type="button">Ամիս</button>
@@ -82,9 +82,9 @@
         </div>
         <div class="fixed-list" id="fixedList"></div>
         <form class="mini-form" id="fixedForm">
-          <input id="fixedName" placeholder="ֆիքսված ծախս" />
-          <input id="fixedAmount" inputmode="numeric" placeholder="գումար" />
-          <button type="submit">+</button>
+          <input id="fixedName" aria-label="Ֆիքսված ծախսի անվանում" placeholder="ֆիքսված ծախս" required />
+          <input id="fixedAmount" aria-label="Ֆիքսված ծախսի գումար՝ դրամ" inputmode="numeric" placeholder="գումար" required />
+          <button type="submit" aria-label="Ավելացնել ֆիքսված ծախս">+</button>
         </form>
         </div>
       </section>
@@ -99,10 +99,10 @@
         </button>
         <div class="accordion-panel" id="addExpensePanel">
         <form class="expense-form" id="expenseForm">
-          <input id="expenseTitle" placeholder="օր. սուրճ, մթերք" required />
+          <input id="expenseTitle" aria-label="Ծախսի անվանում" placeholder="օր. սուրճ, մթերք" required />
           <div class="two-col">
-            <input id="expenseAmount" inputmode="numeric" placeholder="գումար" required />
-            <select id="expenseCategory">
+            <input id="expenseAmount" aria-label="Ծախսի գումար՝ ամբողջ դրամով" inputmode="numeric" placeholder="գումար՝ ամբողջ դրամով" required />
+            <select id="expenseCategory" aria-label="Ծախսի կատեգորիա">
               <option>Սնունդ</option>
               <option>Տրանսպորտ</option>
               <option>Տուն</option>
@@ -111,7 +111,10 @@
               <option>Այլ</option>
             </select>
           </div>
-          <button class="primary-button" type="submit">Պահպանել ծախսը</button>
+          <label for="expenseDate">Ծախսի ամսաթիվ</label>
+          <input id="expenseDate" type="date" required />
+          <button id="expenseSubmit" class="primary-button" type="submit">Պահպանել ծախսը</button>
+          <button id="cancelExpenseEdit" class="secondary-button" type="button" hidden>Չեղարկել խմբագրումը</button>
         </form>
         </div>
       </section>
@@ -142,8 +145,8 @@
           </button>
           <div class="accordion-panel" id="monthsPanel">
           <strong class="total-pill" id="allMonthsTotal">֏0</strong>
-          <select id="monthSelect" class="wide-select"></select>
-          <div class="sub-switch" aria-label="Month details">
+          <select id="monthSelect" class="wide-select" aria-label="Ընտրել ամիսը"></select>
+          <div class="sub-switch" aria-label="Ամսվա տվյալներ">
             <button class="switch-button is-active" data-month-mode="expenses" type="button">Ծախսեր</button>
             <button class="switch-button" data-month-mode="tasks" type="button">Գործեր</button>
           </div>
@@ -180,6 +183,7 @@
           </div>
           <div class="backup-grid">
             <button class="primary-button" id="excelExportBtn" type="button">Պահել Excel ֆայլ</button>
+            <button class="secondary-button" id="csvExportBtn" type="button">Արտահանել ծախսերը CSV-ով</button>
           </div>
           <p class="backup-note" id="excelNote">Ֆայլը բացվում է Excel-ում և ունի առանձին աղյուսակներ։</p>
         </section>
@@ -194,6 +198,13 @@
           <button class="secondary-button compact" id="allowNotificationsBtn" type="button">Միացնել հիշեցումները</button>
         </section>
 
+        <label id="reminderChannelSetting" class="channel-setting" for="reminderChannel">Հիշեցման եղանակ
+          <select id="reminderChannel">
+            <option value="telegram">Telegram-ի հաղորդագրություն</option>
+            <option value="device">Այս սարքում՝ բաց հավելվածում</option>
+            <option value="both">Երկու եղանակով</option>
+          </select>
+        </label>
         <section class="card accordion-card">
           <button class="section-toggle" data-accordion="recurringTasks" type="button" aria-expanded="true">
             <span class="section-toggle-copy">
@@ -204,7 +215,7 @@
           </button>
           <div class="accordion-panel" id="recurringTasksPanel">
           <form class="task-form" id="recurringTaskForm">
-            <input id="recurringTitle" placeholder="օր. մարզվել, դեղ խմել" required />
+            <input id="recurringTitle" aria-label="Կրկնվող գործի անվանում" placeholder="օր. մարզվել, դեղ խմել" required />
             <div class="two-col">
               <div class="time-picker" data-time-picker="recurringTime">
                 <select id="recurringTimeHour" aria-label="Ժամ"></select>
@@ -225,7 +236,7 @@
               <input id="recurringReminder" type="checkbox" checked />
               <span>Հիշեցնել այս գործի համար</span>
             </label>
-            <select id="recurringLead">
+            <select id="recurringLead" aria-label="Որքան շուտ հիշեցնել կրկնվող գործի մասին">
               <option value="0">ճիշտ ժամին</option>
               <option value="5">5 րոպե շուտ</option>
               <option value="15" selected>15 րոպե շուտ</option>
@@ -235,7 +246,7 @@
             <div class="reminder-box">
               <span>Կամ ընտրեք հիշեցման կոնկրետ օրը և ժամը</span>
               <div class="two-col">
-                <input id="recurringReminderDate" type="date" />
+                <input id="recurringReminderDate" type="date" aria-label="Կրկնվող գործի հատուկ հիշեցման ամսաթիվ" />
                 <div class="time-picker" data-time-picker="recurringReminderTime">
                   <select id="recurringReminderTimeHour" aria-label="Հիշեցման ժամ"></select>
                   <select id="recurringReminderTimeMinute" aria-label="Հիշեցման րոպե"></select>
@@ -256,9 +267,9 @@
             <span class="section-toggle-meta" id="scheduledToggleMeta">Բացել</span>
           </button>
           <form class="task-form collapsible-form is-hidden" id="scheduledTaskForm">
-            <input id="scheduledTitle" placeholder="օր. վճարել հաշիվը" required />
+            <input id="scheduledTitle" aria-label="Մեկանգամյա գործի անվանում" placeholder="օր. վճարել հաշիվը" required />
             <div class="two-col">
-              <input id="scheduledDate" type="date" required />
+              <input id="scheduledDate" type="date" aria-label="Մեկանգամյա գործի ամսաթիվ" required />
               <div class="time-picker" data-time-picker="scheduledTime">
                 <select id="scheduledTimeHour" aria-label="Ժամ"></select>
                 <select id="scheduledTimeMinute" aria-label="Րոպե"></select>
@@ -268,7 +279,7 @@
               <input id="scheduledReminder" type="checkbox" checked />
               <span>Հիշեցնել այս գործի համար</span>
             </label>
-            <select id="scheduledLead">
+            <select id="scheduledLead" aria-label="Որքան շուտ հիշեցնել մեկանգամյա գործի մասին">
               <option value="0">ճիշտ ժամին</option>
               <option value="5">5 րոպե շուտ</option>
               <option value="15" selected>15 րոպե շուտ</option>
@@ -278,7 +289,7 @@
             <div class="reminder-box">
               <span>Կամ ընտրեք հիշեցման կոնկրետ օրը և ժամը</span>
               <div class="two-col">
-                <input id="scheduledReminderDate" type="date" />
+                <input id="scheduledReminderDate" type="date" aria-label="Մեկանգամյա գործի հատուկ հիշեցման ամսաթիվ" />
                 <div class="time-picker" data-time-picker="scheduledReminderTime">
                   <select id="scheduledReminderTimeHour" aria-label="Հիշեցման ժամ"></select>
                   <select id="scheduledReminderTimeMinute" aria-label="Հիշեցման րոպե"></select>
@@ -298,7 +309,7 @@
             <span class="section-toggle-meta">Փակել</span>
           </button>
           <div class="accordion-panel" id="taskListPanel">
-          <div class="filter-row" aria-label="Task filters">
+          <div class="filter-row" aria-label="Գործերի զտիչներ">
             <button class="filter-chip is-active" data-task-filter="all" type="button">Բոլորը</button>
             <button class="filter-chip" data-task-filter="done" type="button">Կատարված</button>
             <button class="filter-chip" data-task-filter="todo" type="button">Չկատարված</button>
@@ -310,6 +321,10 @@
         </section>
       </section>
     </main>
+    <aside id="undoBar" class="undo-bar" hidden>
+      <span id="undoMessage" role="status"></span>
+      <button type="button" id="undoButton">Հետ բերել</button>
+    </aside>
 
     <template id="expenseTemplate">
       <article class="expense-item">
@@ -320,13 +335,16 @@
         </div>
         <div class="expense-side">
           <b></b>
-          <button type="button" aria-label="Delete expense">×</button>
+          <button type="button" aria-label="Ջնջել ծախսը">×</button>
         </div>
       </article>
     </template>
 <script>
   window.KHNAYIK_API_BASE = "https://bot.simonyankhachik9.workers.dev";
 </script>
+<script src="./src/export.js"></script>
+<script src="./src/reminder-time.js"></script>
+<script src="./src/sync.js"></script>
 <script src="./src/app.js"></script>
 
   </body>

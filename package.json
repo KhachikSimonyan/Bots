@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node dev-server.cjs",
-    "check": "node --check src/app.js && node --check bot/worker.js && node --check dev-server.cjs",
+    "check": "node --check src/app.js && node --check bot/worker.js && node --check dev-server.cjs && node --test",
+    "test": "node --test",
     "db:create": "wrangler d1 create khnayik-db",
     "db:migrate": "wrangler d1 execute khnayik-db --remote --file=./schema.sql",
     "deploy": "wrangler deploy"

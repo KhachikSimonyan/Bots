@@ -1,24 +1,27 @@
-const DEFAULT_STATE = {
-  salary: 0,
-  fixedExpenses: [],
-  expenses: [],
-  recurringTasks: [],
-  scheduledTasks: [],
-  monthlyBudgets: {},
-  notified: {},
-  appearance: {},
-};
+import { validState, readState, stateWriteStatements, userMeta, MAX_STATE_BYTES } from "./state-store.js";
+import { reminderWriteStatements, sendDueReminders } from "./reminders.js";
+
+// The original production binding was created with a leading space.
+function botEnvironment(env) {
+  return env.BOT_TOKEN || !env[" BOT_TOKEN"] ? env : { ...env, BOT_TOKEN: env[" BOT_TOKEN"] };
+}
 
 export default {
   async fetch(request, env) {
+    env = botEnvironment(env);
     const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") {
-      return withCors(new Response(null, { status: 204 }), env);
-    }
-
     if (url.pathname.startsWith("/api/")) {
-      return withCors(await handleApi(request, env, url), env);
+      const origin = request.headers.get("Origin");
+      if (origin && origin !== env.CORS_ORIGIN && origin !== url.origin) return json({ error: "Forbidden origin" }, 403);
+      let response;
+      try {
+        response = request.method === "OPTIONS" ? new Response(null, {status: 204}) : await handleApi(request, env, url);
+      } catch (error) {
+        console.error("Khnayik API request failed", url.pathname, error.name);
+        response = json({ error: "Տվյալների ծառայությունը ժամանակավորապես անհասանելի է" }, 503);
+      }
+      return withCors(response, origin);
     }
 
     if (request.method !== "POST") {
@@ -29,95 +32,85 @@ export default {
   },
 
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(sendDueReminders(env));
+    ctx.waitUntil(sendDueReminders(botEnvironment(env)));
   },
 };
 
 async function handleApi(request, env, url) {
   if (!env.DB) return json({ error: "D1 database is not configured" }, 500);
 
-  const auth = await authenticateMiniApp(request, env);
+  const sessionRequest = url.pathname === "/api/session" && request.method === "POST";
+  const auth = !sessionRequest && request.headers.has("Authorization")
+    ? await authenticateSession(request, env) : await authenticateMiniApp(request, env);
   if (!auth.ok) return json({ error: auth.error }, auth.status);
+  const id = String(auth.user.id);
 
-  await ensureUser(env, auth.user);
-
+  if (sessionRequest) {
+    const token = crypto.randomUUID() + crypto.randomUUID();
+    const expires = Date.now() + 12 * 3600000;
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM api_sessions WHERE expires_at < ?").bind(Date.now()),
+      env.DB.prepare("INSERT INTO api_sessions(token_hash,user_json,expires_at) VALUES (?,?,?)")
+        .bind(await tokenHash(token), JSON.stringify(auth.user), expires),
+    ]);
+    return json({ token, expires, userId: id });
+  }
+  if (url.pathname === "/api/reminder-access" && request.method === "POST") {
+    if (auth.user.allows_write_to_pm === true) await linkPrivateChat(env, auth.user);
+    return json(await userMeta(env, id));
+  }
   if (url.pathname === "/api/state" && request.method === "GET") {
-    const row = await getUserRow(env, auth.user.id);
-    return json({
-      state: parseState(row?.state_json),
-      updatedAt: row?.updated_at || null,
-    });
-  }
-
-  if (url.pathname === "/api/state" && request.method === "PUT") {
-    const body = await readJson(request);
-    const row = await getUserRow(env, auth.user.id);
-
-    if (body?.lastKnownUpdatedAt && row?.updated_at && row.updated_at !== body.lastKnownUpdatedAt) {
-      return json(
-        {
-          error: "State changed on another device",
-          state: parseState(row.state_json),
-          updatedAt: row.updated_at,
-        },
-        409
-      );
+    if (url.searchParams.has("since")) {
+      const meta = await userMeta(env,id);
+      if (meta.updatedAt === url.searchParams.get("since")) return json({ ...meta, unchanged: true });
     }
-
-    const state = sanitizeState(body?.state);
-    const updatedAt = await saveState(env, auth.user, state);
-    return json({ ok: true, updatedAt });
+    return json(await readState(env, id));
   }
-
   if (url.pathname === "/api/backup" && request.method === "GET") {
-    const row = await getUserRow(env, auth.user.id);
-    return json({
-      exportedAt: new Date().toISOString(),
-      userId: String(auth.user.id),
-      state: parseState(row?.state_json),
-    });
+    return json({ ...(await readState(env,id)), exportedAt: new Date().toISOString(), userId: id });
   }
-
-  if (url.pathname === "/api/restore" && request.method === "POST") {
-    const body = await readJson(request);
-    const state = sanitizeState(body?.state || body);
-    const updatedAt = await saveState(env, auth.user, state);
-    return json({ ok: true, updatedAt });
+  const restore = url.pathname === "/api/restore" && request.method === "POST";
+  if (restore || (url.pathname === "/api/state" && request.method === "PUT")) {
+    let body;
+    try {
+      const buffer = await request.arrayBuffer();
+      if (buffer.byteLength > MAX_STATE_BYTES) return json({ error: "Գրառումների ծավալը գերազանցում է 16 ՄիԲ-ը" }, 413);
+      body = JSON.parse(new TextDecoder().decode(buffer));
+    } catch { return json({ error: "Անվավեր JSON" }, 400); }
+    const state = body?.state ?? (restore ? body : null);
+    if (!validState(state)) return json({ error: "Անվավեր տվյալներ․ պահպանված գրառումները չեն փոխվել" }, 422);
+    const expected = body?.lastKnownUpdatedAt ?? request.headers.get("If-Match");
+    if (typeof expected !== "string" || !expected) return json({ error: "Նախ բեռնեք տվյալների ընթացիկ տարբերակը" }, 428);
+    const mutation = body?.mutationId;
+    if (mutation !== undefined && (typeof mutation !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(mutation))) {
+      return json({ error: "Անվավեր փոփոխության համար" }, 400);
+    }
+    if (mutation && await env.DB.prepare("SELECT 1 AS found FROM applied_changes WHERE user_id=? AND mutation_id=?")
+      .bind(id,mutation).first()) return json({ duplicate: true, ...(await readState(env,id)) });
+    const revision = crypto.randomUUID();
+    const writes = stateWriteStatements(env, id, auth.user.first_name || "", state, expected, revision);
+    if (mutation) writes.push(env.DB.prepare(`INSERT INTO applied_changes(user_id,mutation_id)
+      SELECT ?,? WHERE EXISTS(SELECT 1 FROM users WHERE tg_user_id=? AND updated_at=?)`).bind(id,mutation,id,revision));
+    writes.push(...reminderWriteStatements(env, id, state, revision));
+    const [saved] = await env.DB.batch(writes);
+    if (!saved.meta.changes) return json({ error: "Տվյալները փոփոխվել են այլ սարքից", ...(await readState(env,id)) }, 409);
+    return json({ ok: true, updatedAt: revision });
   }
 
   return json({ error: "Not found" }, 404);
 }
 
 async function handleTelegramWebhook(request, env) {
-  if (env.WEBHOOK_SECRET) {
-    const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
-    if (secret !== env.WEBHOOK_SECRET) {
-      return new Response("Forbidden", { status: 403 });
-    }
+  const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
+  if (!env.WEBHOOK_SECRET || !timingSafeEqual(secret, env.WEBHOOK_SECRET)) return new Response("Forbidden", {status: 403});
+  let update;
+  try { update = await request.json(); } catch { return new Response("Invalid JSON", { status: 400 }); }
+  const message = update?.message;
+  if (message?.chat?.type !== "private" || !message.from?.id || String(message.from.id) !== String(message.chat.id)) {
+    return new Response("ok");
   }
-
-  const update = await readJson(request);
-  const message = update.message;
-
-  if (!message?.chat?.id) return new Response("ok");
-
-  if (env.DB && message.from?.id) {
-    await env.DB.prepare(
-      `INSERT INTO users (tg_user_id, chat_id, first_name, state_json, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(tg_user_id) DO UPDATE SET
-         chat_id = excluded.chat_id,
-         first_name = excluded.first_name`
-    )
-      .bind(
-        String(message.from.id),
-        String(message.chat.id),
-        message.from.first_name || "",
-        JSON.stringify(DEFAULT_STATE),
-        new Date().toISOString()
-      )
-      .run();
-  }
+  if (env.DB) await linkPrivateChat(env, message.from);
+  if (message.write_access_allowed) return new Response("ok");
 
   const text = message.text || "";
   const appUrl = env.APP_URL;
@@ -132,7 +125,7 @@ async function handleTelegramWebhook(request, env) {
     ? "Բարի գալուստ «Խնայիկ»։ Այստեղ կարող եք կառավարել բյուջեն, ծախսերը, գործերը և հիշեցումները։"
     : "Բացեք «Խնայիկ» Mini App-ը՝ բյուջեն և գործերը կառավարելու համար։";
 
-  await telegram(env, "sendMessage", {
+  const result = await telegram(env, "sendMessage", {
     chat_id: message.chat.id,
     text: reply,
     reply_markup: {
@@ -140,7 +133,27 @@ async function handleTelegramWebhook(request, env) {
     },
   });
 
+  if (!result.ok) return new Response("Telegram unavailable", { status: 502 });
   return new Response("ok");
+}
+
+async function linkPrivateChat(env, user) {
+  const id = String(user.id);
+  await env.DB.prepare(`INSERT INTO users(tg_user_id,chat_id,first_name,state_json,updated_at)
+    VALUES (?1,?1,?2,'{}','0') ON CONFLICT(tg_user_id) DO UPDATE SET chat_id=excluded.chat_id,first_name=excluded.first_name`)
+    .bind(id,user.first_name || "").run();
+}
+
+async function tokenHash(value) {
+  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
+}
+
+async function authenticateSession(request, env) {
+  const match = /^Bearer ([a-f0-9-]{72})$/.exec(request.headers.get("Authorization") || "");
+  const record = match && await env.DB.prepare("SELECT user_json FROM api_sessions WHERE token_hash=? AND expires_at>?")
+    .bind(await tokenHash(match[1]),Date.now()).first();
+  return record ? { ok: true, user: JSON.parse(record.user_json) }
+    : { ok: false, status: 401, error: "Նորից բացեք հավելվածը Telegram-ից՝ կապը վերականգնելու համար" };
 }
 
 async function authenticateMiniApp(request, env) {
@@ -163,8 +176,8 @@ async function authenticateMiniApp(request, env) {
     return { ok: false, status: 401, error: "Telegram auth is incomplete" };
   }
 
-  const maxAgeSeconds = Number(env.AUTH_MAX_AGE_SECONDS || 86400);
-  if (Date.now() / 1000 - authDate > maxAgeSeconds) {
+  const maxAgeSeconds = Math.min(Number(env.AUTH_MAX_AGE_SECONDS) || 300, 300);
+  if (!Number.isSafeInteger(authDate) || authDate > Date.now() / 1000 + 30 || Date.now() / 1000 - authDate > maxAgeSeconds) {
     return { ok: false, status: 401, error: "Telegram auth expired" };
   }
 
@@ -202,7 +215,7 @@ async function authenticateMiniApp(request, env) {
 
   try {
     const user = JSON.parse(userJson);
-    if (!user?.id) {
+    if (!Number.isSafeInteger(user?.id) || user.id <= 0) {
       return { ok: false, status: 401, error: "Telegram user is missing" };
     }
 
@@ -210,135 +223,6 @@ async function authenticateMiniApp(request, env) {
   } catch {
     return { ok: false, status: 401, error: "Telegram user is invalid" };
   }
-}
-
-async function sendDueReminders(env) {
-  if (!env.DB || !env.BOT_TOKEN) return;
-
-  const now = new Date();
-
-  const rows = await env.DB.prepare(
-    "SELECT tg_user_id, chat_id, state_json FROM users WHERE chat_id IS NOT NULL"
-  ).all();
-
-  for (const row of rows.results || []) {
-    const state = parseState(row.state_json);
-    const reminders = dueReminders(state, now, env);
-
-    for (const reminder of reminders) {
-      const alreadySent = await env.DB.prepare(
-        "SELECT reminder_key FROM reminder_log WHERE reminder_key = ?"
-      )
-        .bind(reminder.key)
-        .first();
-
-      if (alreadySent) continue;
-
-      await telegram(env, "sendMessage", {
-        chat_id: row.chat_id,
-        text: `Հիշեցում՝ ${reminder.title}`,
-      });
-
-      await env.DB.prepare(
-        "INSERT INTO reminder_log (reminder_key, tg_user_id, sent_at) VALUES (?, ?, ?)"
-      )
-        .bind(reminder.key, row.tg_user_id, now.toISOString())
-        .run();
-    }
-  }
-}
-
-function dueReminders(state, now, env) {
-  const local = getLocalParts(now, env);
-  const today = local.dateKey;
-  const minutesNow = local.hours * 60 + local.minutes;
-  const reminders = [];
-
-  state.scheduledTasks.forEach((task) => {
-    if (!task.reminder || task.done) return;
-
-    const due = dateFromLocal(task.date, task.time || "09:00", env);
-    const reminderAt = task.reminderAt
-      ? new Date(task.reminderAt)
-      : new Date(due.getTime() - Number(task.leadMinutes || 0) * 60000);
-
-    const end = new Date(reminderAt.getTime() + 5 * 60000);
-
-    if (now >= reminderAt && now <= end) {
-      reminders.push({
-        key: `scheduled-${task.id}-${getDateKey(reminderAt)}`,
-        title: task.title,
-      });
-    }
-  });
-
-  state.recurringTasks.forEach((task) => {
-    if (!task.reminder) return;
-
-    if (task.reminderAt) {
-      const reminderAt = new Date(task.reminderAt);
-      const end = new Date(reminderAt.getTime() + 5 * 60000);
-
-      if (now >= reminderAt && now <= end) {
-        reminders.push({
-          key: `recurring-custom-${task.id}`,
-          title: task.title,
-        });
-      }
-
-      return;
-    }
-
-    if (!Array.isArray(task.days) || !task.days.includes(local.day)) return;
-
-    const [hours, minutes] = String(task.time || "09:00").split(":").map(Number);
-    const reminderMinute = hours * 60 + minutes - Number(task.leadMinutes || 0);
-
-    if (minutesNow >= reminderMinute && minutesNow <= reminderMinute + 5) {
-      reminders.push({
-        key: `recurring-${task.id}-${today}`,
-        title: task.title,
-      });
-    }
-  });
-
-  return reminders;
-}
-
-async function ensureUser(env, user) {
-  await env.DB.prepare(
-    `INSERT INTO users (tg_user_id, first_name, state_json, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(tg_user_id) DO UPDATE SET
-       first_name = excluded.first_name`
-  )
-    .bind(String(user.id), user.first_name || "", JSON.stringify(DEFAULT_STATE), new Date().toISOString())
-    .run();
-}
-
-async function getUserRow(env, userId) {
-  return env.DB.prepare(
-    "SELECT state_json, updated_at FROM users WHERE tg_user_id = ?"
-  )
-    .bind(String(userId))
-    .first();
-}
-
-async function saveState(env, user, state) {
-  const updatedAt = new Date().toISOString();
-
-  await env.DB.prepare(
-    `INSERT INTO users (tg_user_id, first_name, state_json, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(tg_user_id) DO UPDATE SET
-       first_name = excluded.first_name,
-       state_json = excluded.state_json,
-       updated_at = excluded.updated_at`
-  )
-    .bind(String(user.id), user.first_name || "", JSON.stringify(state), updatedAt)
-    .run();
-
-  return updatedAt;
 }
 
 async function telegram(env, method, payload) {
@@ -349,51 +233,20 @@ async function telegram(env, method, payload) {
   });
 }
 
-function parseState(value) {
-  try {
-    return sanitizeState(JSON.parse(value || "{}"));
-  } catch {
-    return { ...DEFAULT_STATE };
-  }
-}
-
-function sanitizeState(value) {
-  const state = { ...DEFAULT_STATE, ...(value || {}) };
-
-  state.salary = Math.max(0, Number(state.salary || 0));
-  state.fixedExpenses = Array.isArray(state.fixedExpenses) ? state.fixedExpenses : [];
-  state.expenses = Array.isArray(state.expenses) ? state.expenses : [];
-  state.recurringTasks = Array.isArray(state.recurringTasks) ? state.recurringTasks : [];
-  state.scheduledTasks = Array.isArray(state.scheduledTasks) ? state.scheduledTasks : [];
-  state.monthlyBudgets =
-    state.monthlyBudgets && typeof state.monthlyBudgets === "object" ? state.monthlyBudgets : {};
-  state.notified = state.notified && typeof state.notified === "object" ? state.notified : {};
-  state.appearance = state.appearance && typeof state.appearance === "object" ? state.appearance : {};
-
-  return state;
-}
-
-async function readJson(request) {
-  try {
-    return await request.json();
-  } catch {
-    return {};
-  }
-}
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
   });
 }
 
-function withCors(response) {
+function withCors(response, origin) {
   const headers = new Headers(response.headers);
 
-  headers.set("Access-Control-Allow-Origin", "*");
+  if (origin) headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Vary", "Origin");
   headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "*");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data, Authorization, If-Match");
   headers.set("Access-Control-Max-Age", "86400");
 
   return new Response(response.body, {
@@ -402,34 +255,6 @@ function withCors(response) {
     headers,
   });
 }
-function getDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function getLocalParts(date, env) {
-  const offset = Number(env.TIMEZONE_OFFSET_MINUTES || 240);
-  const shifted = new Date(date.getTime() + offset * 60000);
-
-  return {
-    dateKey: getDateKey(shifted),
-    day: shifted.getUTCDay(),
-    hours: shifted.getUTCHours(),
-    minutes: shifted.getUTCMinutes(),
-  };
-}
-
-function dateFromLocal(date, time, env) {
-  const offset = Number(env.TIMEZONE_OFFSET_MINUTES || 240);
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day, hours, minutes) - offset * 60000);
-}
-
 function bytesToHex(bytes) {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

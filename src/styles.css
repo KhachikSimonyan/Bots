@@ -588,6 +588,7 @@ select:focus {
 
 .accordion-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 14px;
   padding-top: 14px;
@@ -693,6 +694,8 @@ select:focus {
 
 .filter-row {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 8px;
   margin-bottom: 12px;
   overflow-x: auto;
@@ -719,6 +722,7 @@ select:focus {
 
 .task-item {
   align-items: center;
+  min-width: 0;
   gap: 12px;
   padding: 12px;
   border-radius: 18px;
@@ -991,6 +995,53 @@ select:focus {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+[hidden] { display: none !important; }
+.month-actions, .channel-setting {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.channel-setting { margin-block: 12px; }
+.channel-setting select, .month-actions button { padding: 8px 12px; }
+.month-actions button { border-radius: 10px; background: var(--soft); color: var(--ink); }
+.undo-bar {
+  position: fixed;
+  z-index: 4;
+  inset-inline: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  max-width: 480px;
+  margin-inline: auto;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 14px;
+  background: #223d36;
+  color: white;
+  box-shadow: var(--shadow);
+}
+.undo-bar span, .fixed-item strong, .month-line strong { overflow-wrap: anywhere; }
+.undo-bar button { flex: none; border-radius: 10px; padding: 8px; }
+.task-form, .reminder-box, .task-list, .expense-list, .fixed-list, .month-list {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.task-form input[type="date"] { min-width: 0; max-width: 100%; }
+.day-grid label:focus-within, .restore-control:focus-within, button:focus-visible {
+  outline: 2px solid #21503c;
+  outline-offset: 2px;
+}
+
+@media (max-width: 420px) {
+  .task-item { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .task-actions { grid-column: 1 / -1; display: flex; justify-content: end; flex-wrap: wrap; }
+  .task-info strong, .task-info small { white-space: normal; overflow-wrap: anywhere; }
+  .two-col { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .fixed-item { grid-template-columns: minmax(0, 1fr) auto auto; }
 }
 
 @media (max-width: 380px) {

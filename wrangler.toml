@@ -5,7 +5,7 @@ compatibility_date = "2026-05-08"
 [vars]
 APP_URL = "https://khachiksimonyan.github.io/Bots/"
 CORS_ORIGIN = "https://khachiksimonyan.github.io"
-AUTH_MAX_AGE_SECONDS = "2592000"
+AUTH_MAX_AGE_SECONDS = "300"
 TIMEZONE_OFFSET_MINUTES = "240"
 
 [[d1_databases]]
@@ -14,4 +14,4 @@ database_name = "khnayik-db"
 database_id = "205674d8-9b17-47ca-9807-36aec219cb6e"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]

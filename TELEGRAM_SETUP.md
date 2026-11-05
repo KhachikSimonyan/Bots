@@ -73,7 +73,7 @@ https://YOUR_USERNAME.github.io/khnayik/
 
 Նաև փոխեք `CORS_ORIGIN`-ը ձեր GitHub Pages domain-ով և `database_id`-ը ձեր D1 database-ի id-ով։
 
-D1 database-ը ստեղծելու և schema-ն միացնելու համար.
+D1 բազան ստեղծելու համար գործարկեք առաջին երկու հրամանները։ Ստուգեք, որ `wrangler.toml`-ում նշված է նոր բազայի ID-ն, ապա գործարկեք միգրացիան։
 
 ```bash
 npm install
@@ -94,13 +94,13 @@ Deploy-ից հետո Cloudflare-ը կտա Worker URL, օրինակ.
 https://khnayik-bot.YOUR_NAME.workers.dev
 ```
 
-Webhook-ը միացնելու համար browser-ում բացեք.
+Webhook-ը միացրեք տեղային տերմինալում։ Միջավայրի փոփոխականներից փոխանցեք `BOT_TOKEN`, `WEBHOOK_SECRET` և `WEBHOOK_URL`։ Վերջինս Worker-ի HTTPS հասցեն է։ Հրամանը գաղտնիքների արժեքները չի տպում։
 
-```text
-https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook?url=YOUR_WORKER_URL&secret_token=YOUR_WEBHOOK_SECRET
+```bash
+node --input-type=module -e "const {BOT_TOKEN, WEBHOOK_SECRET, WEBHOOK_URL}=process.env; if (!BOT_TOKEN || !WEBHOOK_SECRET || !WEBHOOK_URL) process.exit(2); const r=await fetch('https://api.telegram.org/bot'+BOT_TOKEN+'/setWebhook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:WEBHOOK_URL,secret_token:WEBHOOK_SECRET})}); if (!r.ok || !(await r.json()).ok) process.exit(1); console.log('Webhook connected')"
 ```
 
-Եթե վերադարձնում է `"ok": true`, բոտը միացված է։
+Cloudflare Access-ի դեպքում Telegram հավելվածի հարցումները պետք է հասնեն Worker-ի `/api/*` ուղիներին, իսկ Telegram-ի webhook-ը՝ իր կարգավորված ուղուն։ Worker-ը տվյալների հարցումների համար ստուգում է Telegram-ի ստորագրությունը, իսկ webhook-ի համար՝ գաղտնի վերնագիրը։ Ստուգման համար նույն հավելվածի Origin-ով `OPTIONS /api/state` հարցումը պետք է ստանա `204`, իսկ առանց Telegram հաստատման `GET /api/state` հարցումը՝ `401`։
 
 ## 5. Mini App-ը կապել Worker API-ին
 

@@ -8,7 +8,7 @@
 - Ամսական աշխատավարձի դաշտ
 - Մշտական ֆիքսված ծախսեր
 - Ազատ մնացած գումարի և օրվա թույլատրելի գումարի հաշվարկ
-- Ծախսերի ավելացում, ջնջում և CSV export
+- Ծախսերի գրանցում ըստ ամսաթվի, խմբագրում, ջնջում և CSV արտահանում
 - Գործերի կառավարում նույն Mini App-ի մեջ
 - Ֆիքսված օրերով և ժամերով կրկնվող գործեր
 - Մեկանգամյա գործեր՝ ամսաթիվ և ժամ ընտրելով
@@ -17,19 +17,20 @@
 - Cloudflare Worker bot անվճար webhook-ի համար
 - Cloudflare D1 cloud storage՝ սարքերի միջև տվյալները պահելու համար
 - Server-side հիշեցումներ՝ Telegram message-ով, նույնիսկ երբ Mini App-ը փակ է
-- Երեք կետով բացվող կարգավորումներ՝ ֆոնային նկարների և Excel export-ի համար
+- Կարգավորումներում հասանելի են ֆոնային նկարներն ու Excel (.xlsx) արտահանումը
 - Webhook secret և Telegram Mini App init data verification
 
-Telegram Mini App-ի ներսում տվյալների հիմնական պահոցը Cloudflare D1 database-ն է։ Local storage-ը օգտագործվում է միայն սովորական browser preview-ի համար, երբ Telegram auth և Worker API չկա։
+Telegram Mini App-ի հիմնական պահոցը Cloudflare D1 բազան է։ Սարքում ժամանակավորապես պահվում են նաև չհամաժամացված փոփոխությունները, որպեսզի կապը վերականգնելիս հավելվածը կարողանա ուղարկել դրանք։ Սովորական դիտարկիչում նախադիտման տվյալները պահվում են այդ սարքում։
 
-Երբ app-ը բաց է երկու սարքի վրա, frontend-ը պարբերաբար ստուգում է database-ի վերջին վիճակը և թարմացնում է էկրանը։ Եթե երկու սարք միաժամանակ են փոփոխություն անում, Worker-ը վերադարձնում է conflict, իսկ app-ը փորձում է միացնել երկու կողմի նոր գրառումները՝ ըստ item id-ների։
+Երկու սարքից փոփոխելիս սերվերը ստուգում է տվյալների տարբերակը և պահպանում է միայն դրա համընկնման դեպքում։ Հավելվածը կրկին բեռնում է ավելի նոր վիճակը և կիրառում սարքում սպասող առանձին փոփոխությունները։
 
-Հիշեցումները ստուգվում են նաև Cloudflare Cron Trigger-ով և ուղարկվում են Telegram message-ով։
+Cloudflare-ը հերթագրված հիշեցումները ստուգում է ամեն րոպե և Telegram-ով ուղարկում է միայն հաստատված անձնական չաթին։ Ժամանակավոր խափանումից հետո սերվերը կրկին փորձում է առաքել հաղորդագրությունը։
 
 ## Տեղական preview
 
 ```bash
 npm install
+npm run check
 npm start
 ```
 
@@ -71,16 +72,14 @@ npm install -g wrangler
 wrangler login
 ```
 
-4. Ստեղծեք D1 database և schema-ն կիրառեք.
+4. Ստեղծեք D1 բազան և ստացված `database_id` արժեքը գրեք `wrangler.toml`-ում։ Դրանից հետո նույն բազայի վրա կիրառեք սխեման։
 
 ```bash
 npm run db:create
 npm run db:migrate
 ```
 
-`db:create` հրամանը կտա `database_id`։ Այն տեղադրեք `wrangler.toml` ֆայլում։
-
-5. `wrangler.toml` ֆայլում փոխեք `APP_URL`, `CORS_ORIGIN`, `database_id` արժեքները։
+5. `wrangler.toml`-ում դրեք ձեր `APP_URL` և `CORS_ORIGIN` արժեքները։ `index.html`-ի `KHNAYIK_API_BASE`-ը փոխարինեք այդ Worker-ի հասցեով։
 6. Ավելացրեք Telegram token-ը և webhook secret-ը որպես secrets.
 
 ```bash
@@ -94,10 +93,4 @@ wrangler secret put WEBHOOK_SECRET
 wrangler deploy
 ```
 
-8. Worker URL-ը միացրեք Telegram webhook-ին՝ secret token-ով.
-
-```bash
-https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook?url=YOUR_WORKER_URL&secret_token=YOUR_WEBHOOK_SECRET
-```
-
-Դրանից հետո բոտը մշտապես կաշխատի Cloudflare-ի անվճար պլանի սահմաններում։
+8. Webhook-ը միացրեք [տեղադրման ուղեցույցի](./TELEGRAM_SETUP.md) քայլերով։

@@ -1,7 +1,7 @@
 const STORAGE_KEY = "hy-budget-mini-app";
 const MAX_AMOUNT = 100000000;
 const MAX_BACKGROUND_SIZE = 1024 * 1024;
-const API_BASE = window.KHNAYIK_API_BASE || localStorage.getItem("khnayik-api-base") || "";
+const API_BASE = window.KHNAYIK_API_BASE || "";
 const tg = window.Telegram?.WebApp;
 const CLOUD_MODE = Boolean(API_BASE && tg?.initData);
 
@@ -10,12 +10,23 @@ let activePeriod = "day";
 let activeView = "budget";
 let activeMonthMode = "expenses";
 let selectedMonthKey = "";
+let editingExpenseId = "";
+let displayedDay = getDateKey(new Date());
+let rolloverTimer;
 let isScheduledFormOpen = false;
 let activeTaskFilter = "all";
+let telegramRemindersLinked = false;
+let lastDeviceReminderCheck = Date.now() - 60000;
 let syncTimer = 0;
 let isCloudReady = false;
 let lastCloudUpdatedAt = "";
-let hasUnsavedCloudChanges = false;
+let syncBusy = false;
+let cloudBase;
+let changeJournal;
+let session;
+let sessionRequest;
+let durableView = KhnayikSync.copy(state);
+let syncDescription = "";
 
 const accordionState = {
   fixed: true,
@@ -54,6 +65,9 @@ const els = {
   expenseTitle: document.getElementById("expenseTitle"),
   expenseAmount: document.getElementById("expenseAmount"),
   expenseCategory: document.getElementById("expenseCategory"),
+  expenseDate: document.getElementById("expenseDate"),
+  expenseSubmit: document.getElementById("expenseSubmit"),
+  cancelExpenseEdit: document.getElementById("cancelExpenseEdit"),
   expenseList: document.getElementById("expenseList"),
   expenseCount: document.getElementById("expenseCount"),
   clearBtn: document.getElementById("clearBtn"),
@@ -88,6 +102,7 @@ const els = {
   taskCount: document.getElementById("taskCount"),
   backgroundPresets: document.getElementById("backgroundPresets"),
   excelExportBtn: document.getElementById("excelExportBtn"),
+  csvExportBtn: document.getElementById("csvExportBtn"),
   excelNote: document.getElementById("excelNote"),
   backgroundInput: document.getElementById("backgroundInput"),
   removeBackgroundBtn: document.getElementById("removeBackgroundBtn"),
@@ -128,24 +143,32 @@ const defaultBackgrounds = [
 
 initTelegram();
 initTimePickers();
-ensureCurrentMonthBudget();
+if (!CLOUD_MODE) ensureCurrentMonthBudget();
 renderBackgroundPresets();
 applyBackgroundImage();
 bindEvents();
 render();
-syncFromCloud();
 if (CLOUD_MODE) {
-  setInterval(refreshCloudState, 12000);
+  document.querySelectorAll(".app-view").forEach((view) => { view.inert = true; });
+  syncFromCloud();
+  setInterval(() => { if (!document.hidden) syncFromCloud(); }, 30000);
+  window.addEventListener("online", syncFromCloud);
+  window.addEventListener("storage", (event) => {
+    if (event.key?.startsWith("khnayik:pending:v1:")) scheduleCloudSync();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) syncFromCloud(); });
 }
 setInterval(checkReminders, 30000);
 checkReminders();
 
 function initTelegram() {
   if (!tg) return;
-  tg.ready();
-  tg.expand();
-  tg.setHeaderColor("#f7f3ea");
-  tg.setBackgroundColor("#f7f3ea");
+  tg.ready?.();
+  tg.expand?.();
+  if (tg.isVersionAtLeast?.("6.1")) {
+    tg.setHeaderColor?.(tg.isVersionAtLeast("6.9") ? "#f7f3ea" : "bg_color");
+    tg.setBackgroundColor?.("#f7f3ea");
+  }
 
   const name = tg.initDataUnsafe?.user?.first_name;
   if (name) els.greeting.textContent = `Բարի օր, ${name}`;
@@ -170,11 +193,20 @@ function fillTimeSelect(select, max) {
 }
 
 function bindEvents() {
-  document.querySelectorAll(".switch-button").forEach((button) => {
+  els.expenseDate.value = displayedDay;
+  els.expenseDate.max = displayedDay;
+  els.cancelExpenseEdit.addEventListener("click", resetExpenseForm);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshCalendar();
+  });
+  window.addEventListener("pageshow", refreshCalendar);
+  scheduleRollover();
+  document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       if (!button.dataset.view) return;
       activeView = button.dataset.view;
       renderView();
+      if (activeView === "months") renderMonthlySummary();
     });
   });
 
@@ -203,14 +235,11 @@ function bindEvents() {
   });
 
   els.salaryInput.addEventListener("change", () => {
-    const amount = parseAmount(els.salaryInput.value, "Աշխատավարձ");
-    if (amount === null) {
-      els.salaryInput.value = state.salary || "";
-      return;
-    }
+    const amount = parseAmount(els.salaryInput.value, "Աշխատավարձ", true);
+    if (amount === null) return;
     state.salary = amount;
     updateCurrentMonthBudget();
-    saveState();
+    if (saveState() === false) return;
     render();
   });
 
@@ -222,9 +251,9 @@ function bindEvents() {
     if (isDuplicate(state.fixedExpenses, title)) return showMessage("Այս ֆիքսված ծախսն արդեն կա");
 
     state.fixedExpenses.push({ id: crypto.randomUUID(), title, amount });
-    els.fixedForm.reset();
     updateCurrentMonthBudget();
-    saveState();
+    if (saveState() === false) return;
+    els.fixedForm.reset();
     render();
   });
 
@@ -234,18 +263,18 @@ function bindEvents() {
     const amount = parseAmount(els.expenseAmount.value, "Ծախս");
     if (!title || amount === null) return;
 
-    state.expenses.unshift({
-      id: crypto.randomUUID(),
-      title,
-      amount,
-      category: els.expenseCategory.value,
-      createdAt: new Date().toISOString(),
-    });
-    els.expenseTitle.value = "";
-    els.expenseAmount.value = "";
-    saveState();
+    const original = state.expenses.find((item) => item.id === editingExpenseId);
+    if (editingExpenseId && !original) return showMessage("Այս ծախսն արդեն ջնջվել է։ Չեղարկեք խմբագրումը։");
+    const createdAt = expenseTimestamp(els.expenseDate.value, original?.createdAt);
+    if (!createdAt) return showMessage("Ընտրեք այսօրվա կամ ավելի վաղ ամսաթիվ։");
+    const changes = { title, amount, category: els.expenseCategory.value, createdAt };
+    if (original) Object.assign(original, changes);
+    else state.expenses.unshift({ id: crypto.randomUUID(), ...changes });
+    state.expenses.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (saveState() === false) return;
+    resetExpenseForm();
     render();
-    tg?.HapticFeedback?.notificationOccurred("success");
+    if (tg?.isVersionAtLeast?.("6.1")) tg.HapticFeedback?.notificationOccurred("success");
   });
 
   els.clearBtn.addEventListener("click", () => {
@@ -261,6 +290,7 @@ function bindEvents() {
     render();
   });
   els.excelExportBtn.addEventListener("click", exportExcel);
+  els.csvExportBtn.addEventListener("click", exportCsv);
   els.backgroundInput.addEventListener("change", setBackgroundImage);
   els.removeBackgroundBtn.addEventListener("click", removeBackgroundImage);
 
@@ -282,6 +312,11 @@ function bindEvents() {
   });
 
   els.allowNotificationsBtn.addEventListener("click", requestNotifications);
+  document.getElementById("reminderChannel").addEventListener("change", (event) => {
+    state.appearance.reminderChannel = event.target.value;
+    saveState();
+    renderTasks();
+  });
   els.selectAllDaysBtn.addEventListener("click", toggleAllDays);
   els.recurringTaskForm.addEventListener("submit", addRecurringTask);
   els.scheduledTaskForm.addEventListener("submit", addScheduledTask);
@@ -297,6 +332,7 @@ function addRecurringTask(event) {
 
   state.recurringTasks.unshift({
     id: crypto.randomUUID(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     title,
     time,
     days,
@@ -325,6 +361,7 @@ function addScheduledTask(event) {
 
   state.scheduledTasks.unshift({
     id: crypto.randomUUID(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     title,
     date,
     time,
@@ -346,7 +383,7 @@ function addScheduledTask(event) {
 
 function render() {
   renderView();
-  els.salaryInput.value = state.salary || "";
+  if (document.activeElement !== els.salaryInput) els.salaryInput.value = String(state.salary ?? 0);
   renderBudget();
   renderMonthlySummary();
   renderFixedExpenses();
@@ -359,8 +396,9 @@ function render() {
 }
 
 function renderView() {
-  document.querySelectorAll(".switch-button").forEach((button) => {
+  document.querySelectorAll("[data-view]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.view === activeView);
+    button.setAttribute("aria-pressed", String(button.dataset.view === activeView));
   });
   els.budgetView.classList.toggle("is-active", activeView === "budget");
   els.tasksView.classList.toggle("is-active", activeView === "tasks");
@@ -379,16 +417,17 @@ function renderBudget() {
   const currentBudget = getBudgetForMonth(getMonthKey(new Date()));
   const fixedTotal = sum(currentBudget.fixedExpenses);
   const monthSpent = sum(filterByPeriod("month"));
-  const base = Math.max(currentBudget.salary - fixedTotal, 0);
-  const free = Math.max(base - monthSpent, 0);
-  const usage = base ? Math.min(Math.round((monthSpent / base) * 100), 100) : 0;
+  const base = currentBudget.salary - fixedTotal;
+  const free = base - monthSpent;
+  const usage = base > 0 ? Math.round(monthSpent / base * 100) : 0;
   const daysLeft = getDaysLeftInMonth();
-  const dailyLimit = daysLeft ? Math.floor(free / daysLeft) : free;
+  const dailyLimit = Math.max(0, Math.floor(free / daysLeft));
 
   els.freeMoney.textContent = formatMoney(free);
   els.budgetHint.textContent = `Ֆիքսված՝ ${formatMoney(fixedTotal)} · Այս ամիս ծախսված՝ ${formatMoney(monthSpent)}`;
-  els.budgetPercent.textContent = `${usage}%`;
-  els.budgetMeter.style.strokeDashoffset = String(327 - (327 * usage) / 100);
+  const noBudget = base <= 0 && free < 0;
+  els.budgetPercent.textContent = noBudget ? "Պակասուրդ" : `${usage}%`;
+  els.budgetMeter.style.strokeDashoffset = String(327 * (1 - (noBudget ? 1 : Math.min(usage, 100) / 100)));
   els.periodLabel.textContent = getPeriodLabel();
   els.periodTotal.textContent = formatMoney(sum(filterByPeriod(activePeriod)));
   els.dailyLimit.textContent = formatMoney(dailyLimit);
@@ -408,12 +447,9 @@ function renderFixedExpenses() {
     row.innerHTML = `<strong></strong><span></span><button type="button">×</button>`;
     row.querySelector("strong").textContent = item.title;
     row.querySelector("span").textContent = formatMoney(item.amount);
-    row.querySelector("button").addEventListener("click", () => {
-      state.fixedExpenses = state.fixedExpenses.filter((expense) => expense.id !== item.id);
-      updateCurrentMonthBudget();
-      saveState();
-      render();
-    });
+    const remove = row.querySelector("button");
+    remove.setAttribute("aria-label", `Ջնջել ֆիքսված ծախսը՝ ${item.title}`);
+    remove.addEventListener("click", () => deleteRecord("fixedExpenses", item.id));
     els.fixedList.append(row);
   });
 }
@@ -432,13 +468,67 @@ function renderExpenses() {
     node.querySelector(".expense-info strong").textContent = expense.title;
     node.querySelector(".expense-info span").textContent = `${expense.category} · ${formatDate(expense.createdAt)}`;
     node.querySelector(".expense-side b").textContent = formatMoney(expense.amount);
-    node.querySelector("button").addEventListener("click", () => {
-      state.expenses = state.expenses.filter((item) => item.id !== expense.id);
-      saveState();
-      render();
-    });
+    const remove = node.querySelector("button");
+    remove.setAttribute("aria-label", `Ջնջել «${expense.title}» ծախսը`);
+    remove.addEventListener("click", () => deleteRecord("expenses", expense.id));
     els.expenseList.append(node);
   });
+}
+
+function resetExpenseForm() {
+  editingExpenseId = "";
+  els.expenseForm.reset();
+  els.expenseDate.value = getDateKey(new Date());
+  els.expenseSubmit.textContent = "Պահպանել ծախսը";
+  els.cancelExpenseEdit.hidden = true;
+}
+
+function editExpense(id) {
+  const item = state.expenses.find((expense) => expense.id === id);
+  if (!item) return;
+  editingExpenseId = id;
+  els.expenseTitle.value = item.title;
+  els.expenseAmount.value = item.amount;
+  els.expenseCategory.value = item.category;
+  els.expenseDate.value = getDateKey(new Date(item.createdAt));
+  els.expenseSubmit.textContent = "Պահպանել փոփոխությունները";
+  els.cancelExpenseEdit.hidden = false;
+  activeView = "budget";
+  accordionState.addExpense = true;
+  renderView();
+  renderAccordions();
+  els.expenseTitle.focus();
+}
+
+function expenseTimestamp(day, original) {
+  const time = original ? new Date(original) : new Date();
+  const chosen = new Date(`${day}T12:00`);
+  if (!Number.isFinite(chosen.getTime()) || getDateKey(chosen) !== day || day > getDateKey(new Date())) return null;
+  if (day === getDateKey(time)) return time.toISOString();
+  chosen.setHours(time.getHours(), time.getMinutes(), time.getSeconds(), time.getMilliseconds());
+  return chosen.toISOString();
+}
+
+function scheduleRollover() {
+  window.clearTimeout(rolloverTimer);
+  const midnight = new Date();
+  midnight.setHours(24, 0, 0, 50);
+  rolloverTimer = window.setTimeout(refreshCalendar, Math.max(100, midnight - Date.now()));
+}
+
+function refreshCalendar() {
+  const today = getDateKey(new Date());
+  if (displayedDay !== today) {
+    if (!editingExpenseId && els.expenseDate.value === displayedDay) els.expenseDate.value = today;
+    displayedDay = today;
+    els.expenseDate.max = today;
+    if ((!CLOUD_MODE || isCloudReady) && !state.monthlyBudgets[getMonthKey(new Date())]) {
+      ensureCurrentMonthBudget();
+      saveState();
+    }
+    render();
+  }
+  scheduleRollover();
 }
 
 function renderMonthlySummary() {
@@ -452,7 +542,7 @@ function renderMonthlySummary() {
     return;
   }
 
-  if (!selectedMonthKey || !months.some((month) => month.key === selectedMonthKey)) selectedMonthKey = months[0].key;
+  if (!months.some((month) => month.key === selectedMonthKey)) selectedMonthKey = getMonthKey(new Date());
 
   els.monthSelect.innerHTML = "";
   months.forEach((month) => {
@@ -465,6 +555,7 @@ function renderMonthlySummary() {
 
   document.querySelectorAll("[data-month-mode]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.monthMode === activeMonthMode);
+    button.setAttribute("aria-pressed", String(button.dataset.monthMode === activeMonthMode));
   });
 
   if (activeMonthMode === "expenses") renderMonthExpenses(selectedMonthKey);
@@ -479,7 +570,7 @@ function renderMonthExpenses(monthKey) {
   addMonthTotalRow("Աշխատավարձ", formatMoney(budget.salary));
   addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal));
   addMonthTotalRow("Ընդհանուր ծախս", formatMoney(spent));
-  addMonthTotalRow("Ազատ մնացորդ", formatMoney(Math.max(budget.salary - fixedTotal - spent, 0)));
+  addMonthTotalRow("Ազատ մնացորդ", formatMoney(budget.salary - fixedTotal - spent));
   if (!expenses.length) return;
 
   const max = Math.max(...expenses.map((expense) => Number(expense.amount || 0)), 1);
@@ -491,6 +582,18 @@ function renderMonthExpenses(monthKey) {
     row.querySelector("span").textContent = formatMoney(expense.amount);
     row.querySelector("small").textContent = `${expense.category} · ${formatDate(expense.createdAt)}`;
     row.querySelector("i").style.width = `${Math.max((expense.amount / max) * 100, 8)}%`;
+    const actions = document.createElement("div");
+    actions.className = "month-actions";
+    for (const [label, handler] of [["Խմբագրել", () => editExpense(expense.id)], ["Ջնջել", () => deleteRecord("expenses", expense.id)]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary-button compact";
+      button.textContent = label;
+      button.setAttribute("aria-label", `${label} «${expense.title}» ծախսը`);
+      button.addEventListener("click", handler);
+      actions.append(button);
+    }
+    row.append(actions);
     els.monthList.append(row);
   });
 }
@@ -529,6 +632,8 @@ function renderTasks() {
   els.todayTaskCount.textContent = `${todayItems.length} գործ`;
   els.taskCount.textContent = allCount ? `${allCount} գործ` : "Դեռ գործ չկա";
   els.allowNotificationsBtn.textContent = getNotificationButtonText();
+  document.getElementById("reminderChannelSetting").hidden = !CLOUD_MODE;
+  document.getElementById("reminderChannel").value = reminderChannel();
   els.taskList.innerHTML = "";
   renderTaskFilterButtons();
 
@@ -557,6 +662,7 @@ function renderTasks() {
     `;
 
     const checkbox = row.querySelector(".task-check input");
+    checkbox.setAttribute("aria-label", `Նշել կատարված՝ ${task.title}`);
     checkbox.checked = isTaskDone(task);
     checkbox.addEventListener("change", () => toggleTaskDone(task, checkbox.checked));
     row.querySelector(".task-info strong").textContent = task.title;
@@ -565,8 +671,12 @@ function renderTasks() {
     const reminderBtn = row.querySelector(".reminder-chip");
     reminderBtn.textContent = task.reminder ? "Հիշեցում կա" : "Առանց հիշեցման";
     reminderBtn.classList.toggle("is-off", !task.reminder);
+    reminderBtn.setAttribute("aria-pressed", String(task.reminder));
+    reminderBtn.setAttribute("aria-label", `Հիշեցնել՝ ${task.title}`);
     reminderBtn.addEventListener("click", () => toggleTaskReminder(task));
-    row.querySelector(".delete-task").addEventListener("click", () => deleteTask(task));
+    const remove = row.querySelector(".delete-task");
+    remove.setAttribute("aria-label", `Ջնջել գործը՝ ${task.title}`);
+    remove.addEventListener("click", () => deleteTask(task));
     els.taskList.append(row);
   });
 }
@@ -592,113 +702,132 @@ function renderAccordions() {
 }
 
 function renderSyncStatus(text) {
-  if (text) {
-    els.syncStatus.textContent = text;
-    return;
-  }
-  if (!API_BASE || !getInitData()) {
-    els.syncStatus.textContent = "Preview ռեժիմ՝ պահվում է միայն այս սարքում";
-    return;
-  }
-  els.syncStatus.textContent = isCloudReady ? "Database-ը միացված է" : "Database-ից բեռնում է";
+  if (text) syncDescription = text;
+  els.syncStatus.textContent = CLOUD_MODE
+    ? syncDescription || "Բեռնվում են հաշվի տվյալները"
+    : "Նախադիտում․ պահվում է միայն այս սարքում";
+}
+
+function scheduleCloudSync(delay = 200) {
+  window.clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(syncFromCloud, delay);
+}
+
+function applyCloudView() {
+  const current = changeJournal.entries().reduce((view, entry) => KhnayikSync.apply(view, entry.patch), cloudBase);
+  const changed = JSON.stringify(state) !== JSON.stringify(current);
+  Object.assign(state, normalizeState(current));
+  durableView = KhnayikSync.copy(state);
+  if (changed) render();
 }
 
 async function syncFromCloud() {
-  if (!CLOUD_MODE) return;
+  if (!CLOUD_MODE || syncBusy) return;
+  syncBusy = true;
   try {
-    renderSyncStatus("Բեռնում է database-ից");
-    const data = await api("/api/state");
-    if (data?.state) {
-      Object.assign(state, normalizeState(data.state));
-      lastCloudUpdatedAt = data.updatedAt || "";
+    const data = await api("/api/state" + (isCloudReady ? "?since=" + encodeURIComponent(lastCloudUpdatedAt) : ""));
+    updateReminderLink(data.telegramLinked);
+    if (!isCloudReady) {
+      changeJournal = KhnayikSync.journal(localStorage, session.userId);
+      // Read the durable journal before unlocking the forms. A failed read must not permit an overwrite.
+      changeJournal.entries();
+      if (!data.state) throw new Error("Սերվերը չվերադարձրեց հաշվի տվյալները");
+      cloudBase = normalizeState(data.state);
+      lastCloudUpdatedAt = data.updatedAt;
+      applyCloudView();
       isCloudReady = true;
-      hasUnsavedCloudChanges = false;
+      document.querySelectorAll(".app-view").forEach((view) => { view.inert = false; });
+      if (!state.monthlyBudgets[getMonthKey(new Date())]) {
+        ensureCurrentMonthBudget();
+        saveState();
+      }
       render();
+    } else if (data.state) {
+      cloudBase = normalizeState(data.state);
+      lastCloudUpdatedAt = data.updatedAt;
+      applyCloudView();
     }
-  } catch (error) {
-    renderSyncStatus(getApiErrorText(error, "Database կապ չկա"));
-  }
-}
 
-function queueCloudSave() {
-  if (!CLOUD_MODE) return;
-  hasUnsavedCloudChanges = true;
-  window.clearTimeout(syncTimer);
-  syncTimer = window.setTimeout(saveCloudState, 700);
-}
-
-async function saveCloudState() {
-  try {
-    renderSyncStatus("Պահվում է database-ում");
-    const data = await api("/api/state", {
-      method: "PUT",
-      body: JSON.stringify({ state, lastKnownUpdatedAt: lastCloudUpdatedAt }),
-    });
-    isCloudReady = true;
-    lastCloudUpdatedAt = data.updatedAt || lastCloudUpdatedAt;
-    hasUnsavedCloudChanges = false;
-    renderSyncStatus("Database-ը միացված է");
-  } catch (error) {
-    if (error?.data?.state) {
-      Object.assign(state, mergeStates(error.data.state, state));
-      lastCloudUpdatedAt = error.data.updatedAt || lastCloudUpdatedAt;
-      hasUnsavedCloudChanges = false;
-      saveCloudState();
-      render();
-      return;
+    for (let count = 0; count < 10; count++) {
+      const [entry] = changeJournal.entries();
+      if (!entry) break;
+      renderSyncStatus("Փոփոխությունները պահվում են սերվերում");
+      const next = KhnayikSync.apply(cloudBase, entry.patch);
+      let saved;
+      try {
+        saved = await api("/api/state", {method: "PUT", body: JSON.stringify({
+          state: next, lastKnownUpdatedAt: lastCloudUpdatedAt, mutationId: entry.id,
+        })});
+      } catch (error) {
+        if (error.status !== 409 || !error.data?.state) throw error;
+        cloudBase = normalizeState(error.data.state);
+        lastCloudUpdatedAt = error.data.updatedAt;
+        applyCloudView();
+        continue;
+      }
+      cloudBase = saved.state ? normalizeState(saved.state) : next;
+      lastCloudUpdatedAt = saved.updatedAt;
+      changeJournal.remove(entry);
+      applyCloudView();
     }
-    renderSyncStatus(getApiErrorText(error, "Database պահպանումը չստացվեց"));
-  }
-}
-
-async function refreshCloudState() {
-  if (!CLOUD_MODE || hasUnsavedCloudChanges) return;
-  try {
-    const data = await api("/api/state");
-    if (!data?.updatedAt || data.updatedAt === lastCloudUpdatedAt) return;
-    Object.assign(state, normalizeState(data.state));
-    lastCloudUpdatedAt = data.updatedAt;
-    isCloudReady = true;
-    render();
+    if (changeJournal.entries().length) {
+      renderSyncStatus("Փոփոխությունները սպասում են համաժամացման");
+      scheduleCloudSync(1000);
+    } else renderSyncStatus("Սերվերի տվյալները համաժամացված են");
   } catch (error) {
-    renderSyncStatus(getApiErrorText(error, "Database կապը ժամանակավոր չկա"));
+    const hasQueue = isCloudReady && changeJournal;
+    const reason = error.status === 401 ? "Նորից բացեք հավելվածը Telegram-ից" : error.message;
+    renderSyncStatus(hasQueue ? "Կապի սխալ․ տեղում պահված փոփոխությունները կուղարկվեն կապը վերականգնելիս։ " + reason : "Չհաջողվեց բեռնել տվյալները։ " + reason);
+    if (error.status !== 401) scheduleCloudSync(10000);
+  } finally {
+    syncBusy = false;
   }
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": getInitData(),
-      ...(options.headers || {}),
-    },
-  });
-  if (!response.ok) {
-    const error = new Error(`API ${response.status}`);
-    try {
-      error.data = await response.json();
-    } catch {
-      error.data = null;
+  async function request(route, init) {
+    const response = await fetch(API_BASE + route, { ...init, cache: "no-store", redirect: "error" });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data) {
+      const error = new Error(data?.error || "Տվյալների ծառայությունը հասանելի չէ (" + response.status + ")");
+      Object.assign(error, { status: response.status, data });
+      throw error;
     }
-    throw error;
+    return data;
   }
-  return response.json();
-}
-
-function getApiErrorText(error, fallback) {
-  if (error?.data?.error) return error.data.error;
-  if (error?.message) return error.message;
-  return fallback;
+  if (!session || session.expires <= Date.now()) {
+    sessionRequest ||= request("/api/session", {method:"POST", headers:{"X-Telegram-Init-Data":getInitData()}})
+      .finally(() => { sessionRequest = null; });
+    session = await sessionRequest;
+    if (!session.userId || !session.token) throw new Error("Մուտքի տվյալները թերի են");
+  }
+  return request(path, {...options, headers: {
+    ...(options.body ? {"Content-Type":"application/json"} : {}),
+    Authorization:"Bearer " + session.token,
+  }});
 }
 
 function saveState() {
-  ensureCurrentMonthBudget();
-  if (CLOUD_MODE) {
-    queueCloudSave();
-    return;
+  if (CLOUD_MODE && !isCloudReady) {
+    Object.assign(state, KhnayikSync.copy(durableView));
+    renderSyncStatus("Սպասեք հաշվի տվյալների բեռնմանը");
+    return false;
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  ensureCurrentMonthBudget();
+  try {
+    if (CLOUD_MODE) {
+      const patch = KhnayikSync.diff(durableView, state);
+      if (patch) changeJournal.add(patch);
+      scheduleCloudSync();
+      renderSyncStatus("Պահված է սարքում․ սպասում է սերվերին");
+    } else localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    durableView = KhnayikSync.copy(state);
+    return true;
+  } catch {
+    Object.assign(state, KhnayikSync.copy(durableView));
+    showMessage("Սարքում չհաջողվեց պահպանել փոփոխությունը։ Ազատեք տարածք և կրկին փորձեք։");
+    return false;
+  }
 }
 
 function loadState() {
@@ -723,31 +852,6 @@ function normalizeState(value) {
   };
 }
 
-function mergeStates(remoteValue, localValue) {
-  const remote = normalizeState(remoteValue);
-  const local = normalizeState(localValue);
-  return normalizeState({
-    ...remote,
-    ...local,
-    fixedExpenses: mergeById(remote.fixedExpenses, local.fixedExpenses),
-    expenses: mergeById(remote.expenses, local.expenses).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))),
-    recurringTasks: mergeById(remote.recurringTasks, local.recurringTasks),
-    scheduledTasks: mergeById(remote.scheduledTasks, local.scheduledTasks).sort((a, b) => `${a.date || ""}T${a.time || ""}`.localeCompare(`${b.date || ""}T${b.time || ""}`)),
-    monthlyBudgets: { ...remote.monthlyBudgets, ...local.monthlyBudgets },
-    notified: { ...remote.notified, ...local.notified },
-    appearance: { ...remote.appearance, ...local.appearance },
-  });
-}
-
-function mergeById(remoteItems, localItems) {
-  const merged = new Map();
-  [...remoteItems, ...localItems].forEach((item) => {
-    if (!item?.id) return;
-    merged.set(item.id, { ...(merged.get(item.id) || {}), ...item });
-  });
-  return [...merged.values()];
-}
-
 function ensureCurrentMonthBudget() {
   const key = getMonthKey(new Date());
   if (!state.monthlyBudgets[key]) updateCurrentMonthBudget();
@@ -763,10 +867,10 @@ function updateCurrentMonthBudget() {
 }
 
 function getBudgetForMonth(monthKey) {
-  return state.monthlyBudgets[monthKey] || {
-    salary: monthKey === getMonthKey(new Date()) ? state.salary : 0,
-    fixedExpenses: monthKey === getMonthKey(new Date()) ? state.fixedExpenses : [],
-  };
+  if (state.monthlyBudgets[monthKey]) return state.monthlyBudgets[monthKey];
+  if (monthKey === getMonthKey(new Date())) return { salary: state.salary, fixedExpenses: state.fixedExpenses };
+  const earlier = Object.keys(state.monthlyBudgets).filter((key) => key < monthKey).sort().pop();
+  return state.monthlyBudgets[earlier] || { salary: 0, fixedExpenses: [] };
 }
 
 function renderBackgroundPresets() {
@@ -856,100 +960,77 @@ function renderBackgroundPresetsActive() {
   });
 }
 
-function exportExcel() {
-  const months = getMonthOptions().map((month) => {
-    const budget = getBudgetForMonth(month.key);
-    const expenses = state.expenses.filter((expense) => getMonthKey(new Date(expense.createdAt)) === month.key);
-    const fixedTotal = sum(budget.fixedExpenses);
-    const spent = sum(expenses);
-    return {
-      month: month.label,
-      salary: budget.salary,
-      fixedTotal,
-      spent,
-      free: Math.max(budget.salary - fixedTotal - spent, 0),
-    };
-  });
-
-  const html = `
-    <html>
-      <head><meta charset="UTF-8" /></head>
-      <body>
-        ${excelTable("Ծախսեր", ["Անուն", "Գումար", "Կատեգորիա", "Ամսաթիվ"], state.expenses.map((item) => [
-          item.title,
-          item.amount,
-          item.category,
-          formatDate(item.createdAt),
-        ]))}
-        ${excelTable("Գործեր", ["Անուն", "Տեսակ", "Ժամ", "Հիշեցում"], [
-          ...state.scheduledTasks.map((task) => [task.title, "Մեկանգամյա", `${task.date} ${task.time}`, task.reminder ? "Այո" : "Ոչ"]),
-          ...state.recurringTasks.map((task) => [task.title, "Կրկնվող", `${formatDays(task.days)} ${task.time}`, task.reminder ? "Այո" : "Ոչ"]),
-        ])}
-        ${excelTable("Ամիսներ", ["Ամիս", "Աշխատավարձ", "Ֆիքսված", "Ծախս", "Մնացորդ"], months.map((month) => [
-          month.month,
-          month.salary,
-          month.fixedTotal,
-          month.spent,
-          month.free,
-        ]))}
-      </body>
-    </html>
-  `;
-  downloadBlob(new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" }), `khnayik-${getDateKey(new Date())}.xls`);
-  els.excelNote.textContent = "Excel ֆայլը պատրաստ է";
+function expenseRows() {
+  return [
+    ["Անուն", "Գումար", "Կատեգորիա", "Ամսաթիվ"],
+    ...state.expenses.map((item) => [item.title, item.amount, item.category, new Date(item.createdAt)]),
+  ];
 }
 
-function excelTable(title, headers, rows) {
-  return `
-    <h2>${escapeHtml(title)}</h2>
-    <table border="1">
-      <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
-      <tbody>
-        ${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
-      </tbody>
-    </table>
-  `;
+function exportCsv() {
+  const rows = expenseRows().map((row) => row.map((value) => {
+    if (!(value instanceof Date)) return value;
+    const offset = -value.getTimezoneOffset();
+    const hh = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
+    const mm = String(Math.abs(offset) % 60).padStart(2, "0");
+    const local = new Date(value.getTime() + offset * 60000).toISOString().slice(0, 19);
+    return `${local}${offset < 0 ? "-" : "+"}${hh}:${mm}`;
+  }));
+  downloadBlob(KhnayikExport.csv(rows), `khnayik-expenses-${getDateKey(new Date())}.csv`);
+  els.excelNote.textContent = "Ծախսերի CSV ֆայլը պատրաստ է։";
+}
+
+function exportExcel() {
+  const monthlySpent = new Map();
+  for (const item of state.expenses) {
+    const key = getMonthKey(new Date(item.createdAt));
+    monthlySpent.set(key, (monthlySpent.get(key) || 0) + Number(item.amount));
+  }
+  const months = getMonthOptions().map(({ key }) => {
+    const budget = getBudgetForMonth(key);
+    const fixed = sum(budget.fixedExpenses);
+    const spent = monthlySpent.get(key) || 0;
+    return [key, budget.salary, fixed, spent, budget.salary - fixed - spent];
+  });
+  const tasks = [
+    ["Անուն", "Տեսակ", "Ժամ", "Հիշեցում"],
+    ...state.scheduledTasks.map((task) => [task.title, "Մեկանգամյա", new Date(`${task.date}T${task.time}`), task.reminder ? "Այո" : "Ոչ"]),
+    ...state.recurringTasks.map((task) => [task.title, "Կրկնվող", `${formatDays(task.days)} ${task.time}`, task.reminder ? "Այո" : "Ոչ"]),
+  ];
+  const tables = [
+    { name: "Ծախսեր", rows: expenseRows() },
+    { name: "Գործեր", rows: tasks },
+    { name: "Ամիսներ", rows: [["Ամիս", "Աշխատավարձ", "Ֆիքսված", "Ծախս", "Մնացորդ"], ...months] },
+  ];
+  downloadBlob(KhnayikExport.workbook(tables), `khnayik-${getDateKey(new Date())}.xlsx`);
+  els.excelNote.textContent = "Excel ֆայլը պատրաստ է։";
+}
+
+function reminderChannel() {
+  return CLOUD_MODE ? (state.appearance.reminderChannel || "telegram") : "device";
 }
 
 function checkReminders() {
-  const now = new Date();
-  const today = getDateKey(now);
-  const minutesNow = now.getHours() * 60 + now.getMinutes();
-
-  state.scheduledTasks.forEach((task) => {
-    if (!task.reminder || task.done) return;
-    const due = new Date(`${task.date}T${task.time}`);
-    const reminderAt = task.reminderAt ? new Date(task.reminderAt) : new Date(due.getTime() - task.leadMinutes * 60000);
-    const key = `scheduled-${task.id}-${getDateKey(reminderAt)}`;
-    if (now >= reminderAt && now <= new Date(reminderAt.getTime() + 60000) && !state.notified[key]) {
-      notifyTask(task.title);
-      state.notified[key] = true;
-      saveState();
-    }
-  });
-
-  state.recurringTasks.forEach((task) => {
-    if (!task.reminder) return;
-    if (task.reminderAt) {
-      const reminderAt = new Date(task.reminderAt);
-      const key = `recurring-custom-${task.id}`;
-      if (now >= reminderAt && now <= new Date(reminderAt.getTime() + 60000) && !state.notified[key]) {
-        notifyTask(task.title);
-        state.notified[key] = true;
-        saveState();
+  const now = Date.now();
+  const from = Math.max(lastDeviceReminderCheck, now - 86400000);
+  lastDeviceReminderCheck = now;
+  if (reminderChannel() === "telegram") return;
+  let changed = false;
+  const defaultZone = CLOUD_MODE ? "Asia/Yerevan" : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  for (const [type, tasks] of [["scheduled", state.scheduledTasks], ["recurring", state.recurringTasks]]) {
+    for (const task of tasks) {
+      let occurrence = KhnayikReminderTime.next(task, type, from, defaultZone);
+      while (occurrence && occurrence.at <= now) {
+        if (!state.notified[occurrence.key]) {
+          notifyTask(task.title);
+          state.notified[occurrence.key] = true;
+          changed = true;
+        }
+        occurrence = KhnayikReminderTime.next(task, type, occurrence.at + 1, defaultZone);
       }
-      return;
     }
-    if (!task.days.includes(now.getDay())) return;
-    const [hours, minutes] = task.time.split(":").map(Number);
-    const reminderMinute = hours * 60 + minutes - task.leadMinutes;
-    const key = `recurring-${task.id}-${today}`;
-    if (minutesNow >= reminderMinute && minutesNow <= reminderMinute + 1 && !state.notified[key]) {
-      notifyTask(task.title);
-      state.notified[key] = true;
-      saveState();
-    }
-  });
+  }
+  if (changed) saveState();
 }
 
 function toggleTaskDone(task, isDone) {
@@ -977,32 +1058,104 @@ function toggleTaskReminder(task) {
 }
 
 function deleteTask(task) {
-  const listKey = task.type === "scheduled" ? "scheduledTasks" : "recurringTasks";
-  state[listKey] = state[listKey].filter((entry) => entry.id !== task.id);
-  saveState();
-  renderTasks();
+  deleteRecord(task.type === "scheduled" ? "scheduledTasks" : "recurringTasks", task.id);
+}
+
+function deleteRecord(key, id) {
+  const list = state[key];
+  const index = list.findIndex((item) => item.id === id);
+  if (index === -1) return;
+  const item = list[index];
+  list.splice(index, 1);
+  if (key === "fixedExpenses") updateCurrentMonthBudget();
+  if (saveState() === false) return;
+  render();
+  offerUndo(key, item, index);
+}
+
+const deletedRecords = [];
+let undoTimer;
+function offerUndo(key, item, index) {
+  deletedRecords.push({key, item, index});
+  const bar = document.getElementById("undoBar");
+  const message = document.getElementById("undoMessage");
+  const button = document.getElementById("undoButton");
+  const dismiss = () => {
+    deletedRecords.length = 0;
+    bar.hidden = true;
+  };
+  const refresh = () => {
+    clearTimeout(undoTimer);
+    if (!deletedRecords.length) return dismiss();
+    message.textContent = `Ջնջվեց «${deletedRecords.at(-1).item.title}»։`;
+    bar.hidden = false;
+    undoTimer = setTimeout(dismiss, 20000);
+  };
+  button.onclick = () => {
+    const deleted = deletedRecords.at(-1);
+    if (!deleted) return;
+    const records = state[deleted.key];
+    if (!records.some((entry) => entry.id === deleted.item.id)) {
+      records.splice(Math.min(deleted.index, records.length), 0, deleted.item);
+      if (deleted.key === "fixedExpenses") updateCurrentMonthBudget();
+      if (saveState() === false) return;
+    }
+    deletedRecords.pop();
+    render();
+    refresh();
+  };
+  refresh();
 }
 
 function getMonthOptions() {
+  const now = new Date();
+  const months = new Set([getMonthKey(now), ...Object.keys(state.monthlyBudgets)]);
+  for (const item of state.expenses) months.add(getMonthKey(new Date(item.createdAt)));
+  for (const task of state.scheduledTasks) months.add(task.date.slice(0, 7));
+  // The recurrence has no end date. Include its past months, this month and next month's plan.
+  const horizon = new Date(now.getFullYear(), now.getMonth() + 1, 1, 12);
+  let firstRecurringMonth = null;
+  for (const task of state.recurringTasks) {
+    const firstDay = new Date(task.createdAt || now);
+    for (let offset = 0; offset < 7; offset++) {
+      if (task.days.includes(firstDay.getDay())) {
+        const month = getMonthKey(firstDay);
+        if (firstRecurringMonth === null || month < firstRecurringMonth) firstRecurringMonth = month;
+        break;
+      }
+      firstDay.setDate(firstDay.getDate() + 1);
+    }
+    for (const day of task.doneDates || []) months.add(day.slice(0, 7));
+  }
+  if (firstRecurringMonth) {
+    const cursor = new Date(`${firstRecurringMonth}-01T12:00`);
+    while (cursor <= horizon) {
+      months.add(getMonthKey(cursor));
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
   const formatter = new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" });
-  const grouped = new Map();
-  const add = (date) => grouped.set(getMonthKey(date), { key: getMonthKey(date), date, label: formatter.format(date) });
-
-  Object.keys(state.monthlyBudgets).forEach((key) => add(new Date(`${key}-01T00:00`)));
-  state.expenses.forEach((expense) => add(new Date(expense.createdAt)));
-  state.scheduledTasks.forEach((task) => add(new Date(`${task.date}T00:00`)));
-  state.recurringTasks.forEach((task) => add(new Date(task.createdAt || Date.now())));
-  return [...grouped.values()].sort((a, b) => b.date - a.date);
+  return [...months].sort().reverse().map((key) => ({ key, label: formatter.format(new Date(`${key}-01T12:00`)) }));
 }
 
 function getTasksForMonth(monthKey) {
   const scheduled = state.scheduledTasks
     .filter((task) => task.date.startsWith(monthKey))
-    .map((task) => ({ title: task.title, done: task.done, meta: `${formatTaskDate(task.date)} ${task.time}${getReminderText(task)}` }));
-  const recurring = state.recurringTasks
-    .filter((task) => getMonthKey(new Date(task.createdAt || Date.now())) <= monthKey)
-    .map((task) => ({ title: task.title, done: false, meta: `${formatDays(task.days)} · ${task.time}${getReminderText(task)}` }));
-  return [...scheduled, ...recurring];
+    .map((task) => ({ date: task.date, title: task.title, done: task.done, meta: `${formatTaskDate(task.date)} ${task.time}${getReminderText(task)}` }));
+  const items = [...scheduled];
+  for (const task of state.recurringTasks) {
+    const start = getDateKey(new Date(task.createdAt || Date.now()));
+    const done = new Set(task.doneDates || []);
+    const date = new Date(`${monthKey}-01T12:00`);
+    while (getMonthKey(date) === monthKey) {
+      const day = getDateKey(date);
+      if (done.has(day) || (day >= start && task.days.includes(date.getDay()))) {
+        items.push({ date: day, title: task.title, done: done.has(day), meta: `${formatTaskDate(day)} ${task.time}${getReminderText(task)}` });
+      }
+      date.setDate(date.getDate() + 1);
+    }
+  }
+  return items.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function getTodayTasks() {
@@ -1051,21 +1204,50 @@ function getReminderText(task) {
   return ` · հիշեցում ${getLeadText(task.leadMinutes)}`;
 }
 
-function requestNotifications() {
-  if (!("Notification" in window)) return showMessage("Այս browser-ը չի աջակցում notification-ներ");
-  Notification.requestPermission().then(renderTasks);
+function updateReminderLink(linked) {
+  if (typeof linked !== "boolean") return;
+  telegramRemindersLinked = linked;
+  if (els.allowNotificationsBtn) els.allowNotificationsBtn.textContent = getNotificationButtonText();
+}
+
+async function requestNotifications() {
+  const channel = reminderChannel();
+  try {
+    if (channel !== "telegram") {
+      if ("Notification" in window && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+      if (channel === "device" && (!("Notification" in window) || Notification.permission !== "granted")) {
+        showMessage("Այս սարքում համակարգային ծանուցումներն անջատված են։ Բաց հավելվածում հիշեցումը կերևա էկրանին։");
+      }
+    }
+    if (channel !== "device") {
+      if (!telegramRemindersLinked && tg?.isVersionAtLeast?.("6.9") && tg.requestWriteAccess) {
+        await new Promise(resolve => tg.requestWriteAccess(resolve));
+      }
+      const result = await api("/api/reminder-access", { method: "POST" });
+      updateReminderLink(result.telegramLinked);
+      if (!result.telegramLinked) showMessage("Բացեք բոտի անձնական զրույցը և ուղարկեք /start։ Հետո վերադարձեք ու կրկին սեղմեք այս կոճակը։");
+    }
+  } catch {
+    showMessage("Չհաջողվեց ստուգել հիշեցումների կապը։ Կրկին փորձեք։");
+  }
+  renderTasks();
 }
 
 function maybeRequestNotifications(enabled) {
-  if (!enabled || !("Notification" in window) || Notification.permission !== "default") return;
-  requestNotifications();
+  if (enabled && reminderChannel() !== "telegram" && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().then(renderTasks).catch(() => {});
+  }
 }
 
 function notifyTask(title) {
-  tg?.HapticFeedback?.notificationOccurred("warning");
+  tg?.HapticFeedback?.notificationOccurred?.("warning");
   if ("Notification" in window && Notification.permission === "granted") {
-    new Notification("Գործի հիշեցում", { body: title });
-    return;
+    try {
+      new Notification("Գործի հիշեցում", { body: title });
+      return;
+    } catch { /* Some mobile webviews expose Notification without its constructor. */ }
   }
   window.alert(`Հիշեցում՝ ${title}`);
 }
@@ -1149,6 +1331,7 @@ function formatReminderAt(value) {
 
 function formatDate(value) {
   return new Intl.DateTimeFormat("hy-AM", {
+    year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -1158,17 +1341,19 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function parseAmount(value, label) {
-  const amount = Number(String(value).replace(/[^\d.]/g, ""));
-  if (!Number.isFinite(amount) || amount <= 0) {
-    showMessage(`${label} գումարը պետք է լինի դրական`);
+function parseAmount(value, label, allowZero = false) {
+  const text = String(value).trim();
+  if (!text && allowZero) return 0;
+  const amount = Number(text);
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(amount) || (!allowZero && amount === 0)) {
+    showMessage(`${label}․ գրեք ${allowZero ? "զրո կամ դրական ամբողջ" : "դրական ամբողջ"} գումար դրամով, միայն թվանշաններով։`);
     return null;
   }
   if (amount > MAX_AMOUNT) {
     showMessage(`${label} գումարը չափազանց մեծ է`);
     return null;
   }
-  return Math.round(amount);
+  return amount;
 }
 
 function normalizeTitle(value) {
@@ -1186,15 +1371,17 @@ function isDuplicate(items, title) {
 }
 
 function showMessage(message) {
-  tg?.showAlert?.(message) || window.alert(message);
+  if (tg?.initData && tg.isVersionAtLeast?.("6.2") && tg.showAlert) tg.showAlert(message);
+  else window.alert(message);
 }
 
 function getNotificationButtonText() {
-  if (API_BASE && getInitData()) return "Telegram հիշեցումներ";
-  if (!("Notification" in window)) return "Հիշեցումներ՝ ներսում";
-  if (Notification.permission === "granted") return "Հիշեցումները միացված են";
-  if (Notification.permission === "denied") return "Հիշեցումները արգելված են";
-  return "Միացնել հիշեցումները";
+  const channel = reminderChannel();
+  const telegram = telegramRemindersLinked ? "Telegram-ը միացված է" : "Միացնել Telegram-ի հիշեցումները";
+  if (channel === "telegram") return telegram;
+  const device = "Notification" in window && Notification.permission === "granted"
+    ? "Սարքի ծանուցումները միացված են" : "Սարքի հիշեցումների կարգավորումներ";
+  return channel === "both" ? telegram + " · " + device : device;
 }
 
 function getInitData() {
@@ -1228,15 +1415,7 @@ function downloadBlob(blob, filename) {
   link.href = url;
   link.download = filename;
   link.click();
-  URL.revokeObjectURL(url);
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 function svgBackground(a, b, c, shape) {

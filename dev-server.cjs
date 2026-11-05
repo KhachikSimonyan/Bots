@@ -1,40 +1,47 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
+const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
 
-const root = __dirname;
-const port = Number(process.env.PORT || 4174);
-const types = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-};
+const assets = new Set([
+  "/index.html", "/src/styles.css", "/src/app.js", "/src/export.js",
+  "/src/sync.js", "/src/reminder-time.js",
+]);
+const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript" };
 
-http
-  .createServer((request, response) => {
-    let pathname = decodeURIComponent(request.url.split("?")[0]);
-    if (pathname === "/") pathname = "/index.html";
-
-    const file = path.join(root, pathname);
-    if (!file.startsWith(root)) {
-      response.writeHead(403);
-      response.end("Forbidden");
+function createPreview() {
+  return http.createServer((request, response) => {
+    if (!["GET", "HEAD"].includes(request.method)) {
+      response.writeHead(405, { Allow: "GET, HEAD" }).end();
       return;
     }
-
-    fs.readFile(file, (error, data) => {
+    let pathname;
+    try {
+      pathname = decodeURIComponent(request.url.split("?")[0]);
+    } catch {
+      response.writeHead(400).end("Bad request");
+      return;
+    }
+    if (pathname === "/") pathname = "/index.html";
+    if (!assets.has(pathname)) {
+      response.writeHead(404).end("Not found");
+      return;
+    }
+    fs.readFile(path.join(__dirname, pathname), (error, data) => {
       if (error) {
-        response.writeHead(404);
-        response.end("Not found");
+        response.writeHead(404).end("Not found");
         return;
       }
-
       response.writeHead(200, {
-        "content-type": types[path.extname(file)] || "application/octet-stream",
+        "Content-Type": types[path.extname(pathname)] + "; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
       });
-      response.end(data);
+      response.end(request.method === "HEAD" ? undefined : data);
     });
-  })
-  .listen(port, "127.0.0.1", () => {
-    console.log(`Preview: http://127.0.0.1:${port}`);
   });
+}
+
+module.exports = { createPreview };
+if (require.main === module) {
+  const port = Number(process.env.PORT || 4174);
+  createPreview().listen(port, "127.0.0.1", () => console.log(`Preview: http://127.0.0.1:${port}`));
+}
