@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS reminder_schedule (
   PRIMARY KEY (user_id, task_key)
 );
 CREATE INDEX IF NOT EXISTS idx_reminder_due ON reminder_schedule(available_at);
+CREATE TABLE IF NOT EXISTS bot_configuration (
+  name TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS reminder_sent (
   user_id TEXT NOT NULL,
   occurrence TEXT NOT NULL,

@@ -5,6 +5,7 @@ compatibility_date = "2026-05-08"
 [vars]
 APP_URL = "https://khachiksimonyan.github.io/Bots/"
 CORS_ORIGIN = "https://khachiksimonyan.github.io"
+WEBHOOK_URL = "https://bot.simonyankhachik9.workers.dev/telegram/webhook"
 AUTH_MAX_AGE_SECONDS = "300"
 TIMEZONE_OFFSET_MINUTES = "240"
 

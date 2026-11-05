@@ -1,5 +1,6 @@
 import { validState, readState, stateWriteStatements, userMeta, MAX_STATE_BYTES } from "./state-store.js";
 import { reminderWriteStatements, sendDueReminders } from "./reminders.js";
+import { configureTelegram } from "./configure.js";
 
 // The original production binding was created with a leading space.
 function botEnvironment(env) {
@@ -24,6 +25,11 @@ export default {
       return withCors(response, origin);
     }
 
+    if (url.pathname === "/telegram/webhook") {
+      return request.method === "POST"
+        ? handleTelegramWebhook(request, env)
+        : new Response("Method not allowed", { status: 405 });
+    }
     if (request.method !== "POST") {
       return new Response("Khnayik bot is running");
     }
@@ -32,7 +38,12 @@ export default {
   },
 
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(sendDueReminders(botEnvironment(env)));
+    const configured = botEnvironment(env);
+    ctx.waitUntil((async () => {
+      try { await configureTelegram(configured); }
+      catch (error) { console.error(error.message); }
+      await sendDueReminders(configured);
+    })());
   },
 };
 
