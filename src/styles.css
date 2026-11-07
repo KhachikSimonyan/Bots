@@ -166,13 +166,149 @@ h2 {
 
 .app-switch {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 12px;
   padding: 5px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.62);
 }
+
+.debt-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 20px;
+  border-radius: 24px;
+  color: white;
+  background: linear-gradient(135deg, #a94f36, #64383d);
+  box-shadow: var(--shadow);
+}
+
+.debt-hero span,
+.debt-metrics span {
+  display: block;
+  font-size: 12px;
+  opacity: 0.78;
+}
+
+.debt-hero strong {
+  display: block;
+  margin-top: 6px;
+  font-size: clamp(20px, 5vw, 30px);
+}
+
+.debt-hero-date { text-align: right; }
+.debt-plan-card,
+.debt-settings-card,
+.debt-form-card,
+.debt-list-card { margin-bottom: 12px; }
+
+.debt-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.debt-metrics article {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--soft);
+}
+
+.debt-metrics strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.debt-recommendation {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(50, 122, 95, 0.11);
+  line-height: 1.5;
+}
+
+.debt-recommendation.is-warning {
+  color: #8d3525;
+  background: #f9ddd4;
+}
+
+.debt-payment-plan,
+.debt-list {
+  display: grid;
+  gap: 9px;
+}
+
+.debt-plan-line,
+.debt-item {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.72);
+}
+
+.debt-plan-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.debt-plan-line span { color: var(--muted); font-size: 12px; }
+.debt-plan-line.is-target { border-color: var(--green); background: rgba(50,122,95,0.08); }
+
+.debt-settings-grid,
+.debt-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debt-settings-grid { margin-bottom: 10px; }
+.debt-settings-grid label,
+.debt-form > label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.debt-settings-grid input,
+.debt-settings-grid select,
+.debt-form input,
+.debt-form select { width: 100%; padding: 12px; }
+.debt-form .primary-button,
+.debt-form .secondary-button { width: 100%; }
+.debt-toggle { align-self: end; min-height: 46px; color: var(--ink) !important; }
+
+.debt-item-head,
+.debt-item-actions,
+.debt-pay-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debt-item-head { justify-content: space-between; }
+.debt-item-head strong { overflow-wrap: anywhere; }
+.debt-item-head b { color: #9a3f2d; white-space: nowrap; }
+.debt-item-meta { margin: 6px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.debt-item-progress { height: 7px; overflow: hidden; border-radius: 999px; background: var(--soft); }
+.debt-item-progress i { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+.debt-item-actions { margin-top: 10px; flex-wrap: wrap; }
+.debt-item-actions button { padding: 8px 10px; border-radius: 10px; background: var(--soft); color: var(--ink); }
+.debt-pay-form { flex: 1 1 210px; }
+.debt-pay-form input { width: 100%; min-width: 90px; padding: 8px 10px; }
+.debt-pay-form button { flex: none; background: var(--green); color: white; }
+.debt-item.is-closed { opacity: 0.7; }
+.debt-item.is-closed .debt-item-head b { color: var(--green); }
 
 .sub-switch {
   display: flex;
@@ -1095,6 +1231,10 @@ select:focus {
   .task-info strong, .task-info small { white-space: normal; overflow-wrap: anywhere; }
   .two-col { display: grid; grid-template-columns: minmax(0, 1fr); }
   .fixed-item { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .app-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .debt-metrics, .debt-settings-grid, .debt-form { grid-template-columns: 1fr; }
+  .debt-hero { grid-template-columns: 1fr; }
+  .debt-hero-date { text-align: left; }
 }
 
 @media (max-width: 380px) {

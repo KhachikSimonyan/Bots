@@ -23,6 +23,16 @@ function scheduleSpecs(state, now) {
       schedules.push({ key: type + "-" + task.id, spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });
     }
   }
+  for (const debt of Array.isArray(state.debts) ? state.debts : []) {
+    if (!debt?.id || !debt.reminder || Number(debt.balance) <= 0 || typeof debt.title !== "string") continue;
+    const spec = {
+      type: "debt", id: debt.id, title: `Պարտքի վճարման օր՝ ${debt.title}`,
+      reminder: true, dueDay: debt.dueDay, time: "09:00", leadMinutes: 1440,
+      timeZone: debt.timeZone || "Asia/Yerevan", createdAt: debt.createdAt,
+    };
+    const occurrence = KhnayikReminderTime.next(spec, "debt", now - CATCH_UP);
+    if (occurrence) schedules.push({ key: "debt-" + debt.id, spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });
+  }
   return schedules;
 }
 

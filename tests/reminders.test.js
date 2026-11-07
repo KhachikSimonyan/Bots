@@ -53,6 +53,10 @@ test("night-before lead, completed date, and DST-aware wall times", () => {
   assert.equal(KhnayikReminderTime.next({...berlin,date:"2027-07-01"}, "scheduled", tick).at, ms("2027-07-01T07:00Z"));
   assert.equal(KhnayikReminderTime.next({...berlin,date:"2027-03-28",time:"02:30",leadMinutes:0}, "scheduled", tick).at, ms("2027-03-28T01:30Z"));
   assert.equal(KhnayikReminderTime.next({...berlin,date:"2027-10-31",time:"02:30",leadMinutes:0}, "scheduled", tick).at, ms("2027-10-31T00:30Z"));
+  const debt = {id:"d",title:"Loan",reminder:true,dueDay:31,time:"09:00",leadMinutes:1440,timeZone:"Asia/Yerevan"};
+  const debtDue = KhnayikReminderTime.next(debt,"debt",ms("2027-02-01T00:00Z"));
+  assert.equal(debtDue.key,"debt-d-2027-02-28");
+  assert.equal(debtDue.at,ms("2027-02-27T05:00Z"));
 });
 
 test("delayed and overlapping scans isolate restored accounts, groups and device-only reminders", async t => {
@@ -67,6 +71,22 @@ test("delayed and overlapping scans isolate restored accounts, groups and device
   await sendDueReminders(env,tick+11*60000);
   assert.deepEqual(sends.sort(), ["100","200"]);
   assert.equal(sql.prepare("SELECT count(*) AS n FROM reminder_sent").get().n,2);
+});
+
+test("active debt due dates are delivered through Telegram while the app is closed", async t => {
+  const { env, user } = fixture();
+  user("100", { scheduledTasks:[], recurringTasks:[], debts:[{
+    id:"debt", title:"Քարտ", balance:50000, reminder:true, dueDay:5,
+    timeZone:"Asia/Yerevan", createdAt:"2026-11-01T00:00:00Z",
+  }] });
+  let body;
+  t.mock.method(globalThis,"fetch",async (_url, options) => {
+    body = JSON.parse(options.body);
+    return Response.json({ok:true});
+  });
+  await sendDueReminders(env,tick);
+  assert.equal(body.chat_id,"100");
+  assert.match(body.text,/Պարտքի վճարման օր՝ Քարտ/);
 });
 
 test("rate limits retain the pending occurrence until Telegram confirms delivery", async t => {

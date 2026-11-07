@@ -98,6 +98,18 @@ test("remaining days and daily limit run until the next salary date", () => {
   assert.equal(run("els.dailyLimit.textContent"), run("formatMoney(Math.floor(30000 / getDaysUntilNextSalary()))"));
 });
 
+test("debt payments reduce the balance and the spendable monthly budget", () => {
+  const { run } = preview();
+  run(`state.salary=100000;state.fixedExpenses=[];state.monthlyBudgets={};updateCurrentMonthBudget(true);
+    state.debts=[{id:'d',title:'Քարտ',type:'card',balance:50000,originalBalance:50000,annualRate:20,
+      minimumPayment:5000,dueDay:10,lateFee:0,paidTotal:0,pastDue:false,reminder:true,createdAt:new Date().toISOString(),closedAt:''}];
+    registerDebtPayment('d','10000')`);
+  assert.equal(run("state.debts[0].balance"), 40000);
+  assert.equal(run("state.debtPayments[0].amount"), 10000);
+  assert.equal(run("els.freeMoney.textContent"), run("formatMoney(90000)"));
+  assert.equal(run("sum(filterDebtPayments('month'))"), 10000);
+});
+
 test("saving an old expense preserves its ID and date when edited", () => {
   const { run } = preview();
   run("els.expenseDate.value='2024-05-01';els.expenseTitle.value='Coffee';els.expenseAmount.value='120';els.expenseForm.events.submit({preventDefault(){}})");

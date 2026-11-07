@@ -1,6 +1,7 @@
 export const emptyState = () => ({
   salary: 0, salaryMode: "fixed", salaryDay: 1,
   fixedExpenses: [], expenses: [], recurringTasks: [], scheduledTasks: [],
+  debts: [], debtPayments: [], debtSettings: { strategy: "smart", safetyReserve: 0 },
   monthlyBudgets: {}, notified: {}, appearance: {},
 });
 
@@ -18,6 +19,13 @@ const task = (item) => time(item.time) && typeof item.reminder === "boolean"
   && (!item.reminderAt || timestamp(item.reminderAt))
   && (item.leadMinutes == null || (Number.isInteger(item.leadMinutes) && item.leadMinutes >= 0 && item.leadMinutes <= 1440))
   && (!item.createdAt || timestamp(item.createdAt));
+const debt = (item) => amount(item.balance) && amount(item.originalBalance) && item.originalBalance >= item.balance
+  && Number.isFinite(item.annualRate) && item.annualRate >= 0 && item.annualRate <= 1000
+  && amount(item.minimumPayment) && amount(item.lateFee) && amount(item.paidTotal)
+  && Number.isInteger(item.dueDay) && item.dueDay >= 1 && item.dueDay <= 31
+  && ["card", "loan", "personal", "tax", "other"].includes(item.type)
+  && typeof item.pastDue === "boolean" && typeof item.reminder === "boolean"
+  && (!item.createdAt || timestamp(item.createdAt)) && (!item.closedAt || timestamp(item.closedAt));
 
 function list(value, check) {
   if (!Array.isArray(value)) return false;
@@ -37,8 +45,12 @@ export function validState(state) {
     || !list(state.scheduledTasks, (item) => task(item) && day(item.date) && typeof item.done === "boolean")
     || !list(state.recurringTasks, (item) => task(item) && Array.isArray(item.days) && item.days.length > 0
       && item.days.every((n) => Number.isInteger(n) && n >= 0 && n <= 6)
-      && Array.isArray(item.doneDates) && item.doneDates.every(day))) return false;
-  if (!object(state.monthlyBudgets) || !object(state.appearance) || !object(state.notified)) return false;
+      && Array.isArray(item.doneDates) && item.doneDates.every(day))
+    || !list(state.debts, debt)
+    || !list(state.debtPayments, (item) => text(item.debtId) && fixed(item) && timestamp(item.createdAt))) return false;
+  if (!object(state.monthlyBudgets) || !object(state.appearance) || !object(state.notified)
+    || !object(state.debtSettings) || !["smart", "avalanche", "snowball"].includes(state.debtSettings.strategy)
+    || !amount(state.debtSettings.safetyReserve)) return false;
   if (!Object.entries(state.monthlyBudgets).every(([key, budget]) => /^\d{4}-(0[1-9]|1[0-2])$/.test(key)
     && object(budget) && amount(budget.salary) && list(budget.fixedExpenses, fixed)
     && (budget.salaryMode == null || ["fixed", "variable"].includes(budget.salaryMode))

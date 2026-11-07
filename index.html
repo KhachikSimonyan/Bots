@@ -27,6 +27,7 @@
       <section class="app-switch" aria-label="Հավելվածի բաժիններ">
         <button class="switch-button is-active" data-view="budget" type="button">Բյուջե</button>
         <button class="switch-button" data-view="tasks" type="button">Գործեր</button>
+        <button class="switch-button" data-view="debts" type="button">Պարտքեր</button>
         <button class="switch-button" data-view="months" type="button">Ամիսներ</button>
       </section>
 
@@ -170,6 +171,116 @@
           </div>
           <div class="month-list" id="monthList"></div>
           </div>
+        </section>
+      </section>
+
+      <section class="app-view" id="debtsView">
+        <section class="debt-hero">
+          <div>
+            <span>Ընդհանուր ակտիվ պարտք</span>
+            <strong id="totalDebt">֏0</strong>
+          </div>
+          <div class="debt-hero-date">
+            <span>Ազատման գնահատական</span>
+            <strong id="debtFreeDate">—</strong>
+          </div>
+        </section>
+
+        <section class="card debt-plan-card">
+          <div class="section-head">
+            <div>
+              <h2>Այս ամսվա պլանը</h2>
+              <p id="debtPlanSummary">Ավելացրեք պարտքերը՝ անհատական պլան ստանալու համար։</p>
+            </div>
+          </div>
+          <div class="debt-metrics">
+            <article><span>Վճարման բյուջե</span><strong id="debtCapacity">֏0</strong></article>
+            <article><span>Նվազագույններ</span><strong id="debtMinimums">֏0</strong></article>
+            <article><span>Կանխատեսվող տոկոս</span><strong id="debtInterest">—</strong></article>
+          </div>
+          <div class="debt-recommendation" id="debtRecommendation"></div>
+          <div class="debt-payment-plan" id="debtPaymentPlan"></div>
+        </section>
+
+        <section class="card debt-settings-card">
+          <div class="section-head">
+            <div>
+              <h2>Ռազմավարություն</h2>
+              <p>Խնայիկը կպահպանի նվազագույն վճարները և ազատ գումարը կուղղի մեկ նպատակային պարտքի։</p>
+            </div>
+          </div>
+          <div class="debt-settings-grid">
+            <label>Մարման եղանակ
+              <select id="debtStrategy">
+                <option value="smart">Խելացի՝ արագ հաղթանակ + բարձր տոկոս</option>
+                <option value="avalanche">Ձնահյուս՝ ամենաբարձր տոկոսը նախ</option>
+                <option value="snowball">Ձնագունդ՝ ամենափոքր պարտքը նախ</option>
+              </select>
+            </label>
+            <label>Պաշտպանված գումար
+              <input id="debtSafetyReserve" inputmode="numeric" placeholder="0՝ ավտոմատ հաշվարկ" />
+            </label>
+          </div>
+          <button class="secondary-button" id="saveDebtSettings" type="button">Պահել կարգավորումները</button>
+          <p class="backup-note" id="debtReserveNote">0-ի դեպքում Խնայիկը պահուստը կհաշվի ծախսերի պատմությունից։</p>
+        </section>
+
+        <section class="card debt-form-card">
+          <div class="section-head">
+            <div>
+              <h2 id="debtFormTitle">Ավելացնել պարտք</h2>
+              <p>Գրեք պայմանագրի իրական թվերը՝ ճշգրիտ պլան ստանալու համար։</p>
+            </div>
+          </div>
+          <form id="debtForm" class="debt-form">
+            <label>Անվանում
+              <input id="debtName" maxlength="80" placeholder="օր. վարկային քարտ" required />
+            </label>
+            <label>Տեսակ
+              <select id="debtType">
+                <option value="card">Վարկային քարտ</option>
+                <option value="loan">Վարկ</option>
+                <option value="personal">Անձնական պարտք</option>
+                <option value="tax">Հարկ կամ պետական պարտք</option>
+                <option value="other">Այլ</option>
+              </select>
+            </label>
+            <label>Մնացորդ
+              <input id="debtBalance" inputmode="numeric" placeholder="գումար՝ դրամ" required />
+            </label>
+            <label>Տարեկան տոկոս (%)
+              <input id="debtRate" type="number" min="0" max="1000" step="0.01" value="0" required />
+            </label>
+            <label>Նվազագույն ամսական վճար
+              <input id="debtMinimum" inputmode="numeric" placeholder="գումար՝ դրամ" required />
+            </label>
+            <label>Վճարման օրը
+              <input id="debtDueDay" type="number" min="1" max="31" value="1" required />
+            </label>
+            <label>Ուշացման տույժ
+              <input id="debtLateFee" inputmode="numeric" value="0" />
+            </label>
+            <label class="toggle-row debt-toggle">
+              <input id="debtPastDue" type="checkbox" />
+              <span>Արդեն ուշացած է</span>
+            </label>
+            <label class="toggle-row debt-toggle">
+              <input id="debtReminder" type="checkbox" checked />
+              <span>Հիշեցնել Telegram-ով մեկ օր շուտ</span>
+            </label>
+            <button class="primary-button" id="debtSubmit" type="submit">Պահպանել պարտքը</button>
+            <button class="secondary-button" id="cancelDebtEdit" type="button" hidden>Չեղարկել խմբագրումը</button>
+          </form>
+        </section>
+
+        <section class="card debt-list-card">
+          <div class="section-head">
+            <div>
+              <h2>Իմ պարտքերը</h2>
+              <p id="debtCount">Դեռ պարտք չկա</p>
+            </div>
+          </div>
+          <div class="debt-list" id="debtList"></div>
         </section>
       </section>
 
@@ -362,6 +473,7 @@
 </script>
 <script src="./src/export.js"></script>
 <script src="./src/reminder-time.js"></script>
+<script src="./src/debt-plan.js"></script>
 <script src="./src/sync.js"></script>
 <script src="./src/app.js"></script>
 

@@ -58,6 +58,21 @@
       const start = Number.isFinite(created) ? Math.max(from, created) : from;
       const lead = Math.max(0, Math.min(1440, Number(task.leadMinutes) || 0)) * MINUTE;
       const done = new Set(Array.isArray(task.doneDates) ? task.doneDates : []);
+      if (type === "debt") {
+        const dueDay = Math.max(1, Math.min(31, Number(task.dueDay) || 1));
+        const first = dayKey(start + lead, zone);
+        const [firstYear, firstMonth] = first.split("-").map(Number);
+        for (let offset = 0; offset < 24; offset++) {
+          const monthIndex = firstMonth - 1 + offset;
+          const year = firstYear + Math.floor(monthIndex / 12);
+          const month = ((monthIndex % 12) + 12) % 12;
+          const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+          const day = `${year}-${String(month + 1).padStart(2,"0")}-${String(Math.min(dueDay,lastDay)).padStart(2,"0")}`;
+          const at = instant(day, task.time || "09:00", zone) - lead;
+          if (Number.isFinite(at) && at >= start) return { at, key: "debt-" + task.id + "-" + day };
+        }
+        return null;
+      }
       if (task.reminderAt || type === "scheduled") {
         const at = task.reminderAt ? Date.parse(task.reminderAt) : instant(task.date, task.time || "09:00", zone) - lead;
         if (!Number.isFinite(at) || at < start) return null;
