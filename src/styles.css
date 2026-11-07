@@ -381,6 +381,59 @@ select:focus {
   text-align: right;
 }
 
+.input-row select {
+  width: 52%;
+  padding: 10px 12px;
+}
+
+.salary-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.salary-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--soft);
+}
+
+.salary-form > label {
+  font-weight: 700;
+}
+
+.salary-entry {
+  display: flex;
+  gap: 8px;
+}
+
+.salary-entry input {
+  width: 100%;
+  padding: 11px 12px;
+}
+
+.salary-entry button {
+  flex: 0 0 auto;
+  border-radius: 12px;
+  padding: 0 16px;
+  background: var(--green);
+  color: white;
+}
+
+.field-hint,
+.salary-status {
+  margin: -4px 4px 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.salary-status.is-required {
+  color: #a33d27;
+  font-weight: 700;
+}
+
 .fixed-list,
 .expense-list,
 .month-list {

@@ -76,9 +76,27 @@
           <span class="section-toggle-meta">Փակել</span>
         </button>
         <div class="accordion-panel" id="fixedPanel">
-        <div class="input-row">
-          <label for="salaryInput">Աշխատավարձ</label>
-          <input id="salaryInput" inputmode="numeric" placeholder="օր. 300000" />
+        <div class="salary-settings">
+          <div class="input-row">
+            <label for="salaryMode">Աշխատավարձի տեսակ</label>
+            <select id="salaryMode">
+              <option value="fixed">Ֆիքսված</option>
+              <option value="variable">Ոչ կայուն</option>
+            </select>
+          </div>
+          <div class="input-row" id="salaryDayRow">
+            <label for="salaryDay">Ստացման օրը</label>
+            <input id="salaryDay" type="number" min="1" max="31" inputmode="numeric" aria-describedby="salaryDayHint" />
+          </div>
+          <small id="salaryDayHint" class="field-hint">Եթե ամիսն ավելի կարճ է, կհաշվվի ամսվա վերջին օրը։</small>
+          <form class="salary-form" id="salaryForm">
+            <label id="salaryInputLabel" for="salaryInput">Ֆիքսված գումար</label>
+            <div class="salary-entry">
+              <input id="salaryInput" inputmode="numeric" placeholder="օր. 300000" required />
+              <button type="submit">Պահել</button>
+            </div>
+          </form>
+          <p class="salary-status" id="salaryStatus" role="status"></p>
         </div>
         <div class="fixed-list" id="fixedList"></div>
         <form class="mini-form" id="fixedForm">

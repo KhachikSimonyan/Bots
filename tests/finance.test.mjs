@@ -70,6 +70,20 @@ test("monthly budgets preserve prior values, deficits and transient form input",
   assert.equal(run("els.budgetPercent.textContent"), "Պակասուրդ");
 });
 
+test("fixed salary repeats while variable salary requires a monthly confirmation", () => {
+  const { run } = preview();
+  run("state.salary = 320000; state.salaryMode = 'fixed'; state.salaryDay = 10; state.monthlyBudgets = {}; updateCurrentMonthBudget(true)");
+  assert.equal(run("getBudgetForMonth('2999-12').salary"), 320000);
+  assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salaryDay"), 10);
+  run("state.salaryMode = 'variable'; state.monthlyBudgets = {}; state.salary = 320000; ensureCurrentMonthBudget()");
+  assert.equal(run("state.salary"), 0);
+  assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salaryConfirmed"), false);
+  assert.equal(run("getBudgetForMonth('2999-12').salary"), 0);
+  run("els.salaryInput.value = '175000'; els.salaryForm.events.submit({preventDefault(){}})");
+  assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salary"), 175000);
+  assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salaryConfirmed"), true);
+});
+
 test("saving an old expense preserves its ID and date when edited", () => {
   const { run } = preview();
   run("els.expenseDate.value='2024-05-01';els.expenseTitle.value='Coffee';els.expenseAmount.value='120';els.expenseForm.events.submit({preventDefault(){}})");

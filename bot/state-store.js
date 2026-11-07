@@ -1,5 +1,6 @@
 export const emptyState = () => ({
-  salary: 0, fixedExpenses: [], expenses: [], recurringTasks: [], scheduledTasks: [],
+  salary: 0, salaryMode: "fixed", salaryDay: 1,
+  fixedExpenses: [], expenses: [], recurringTasks: [], scheduledTasks: [],
   monthlyBudgets: {}, notified: {}, appearance: {},
 });
 
@@ -29,7 +30,9 @@ function list(value, check) {
 }
 
 export function validState(state) {
-  if (!object(state) || !amount(state.salary) || !list(state.fixedExpenses, fixed)
+  if (!object(state) || !amount(state.salary) || !["fixed", "variable"].includes(state.salaryMode)
+    || !Number.isInteger(state.salaryDay) || state.salaryDay < 1 || state.salaryDay > 31
+    || !list(state.fixedExpenses, fixed)
     || !list(state.expenses, (item) => fixed(item) && timestamp(item.createdAt) && typeof item.category === "string")
     || !list(state.scheduledTasks, (item) => task(item) && day(item.date) && typeof item.done === "boolean")
     || !list(state.recurringTasks, (item) => task(item) && Array.isArray(item.days) && item.days.length > 0
@@ -37,7 +40,10 @@ export function validState(state) {
       && Array.isArray(item.doneDates) && item.doneDates.every(day))) return false;
   if (!object(state.monthlyBudgets) || !object(state.appearance) || !object(state.notified)) return false;
   if (!Object.entries(state.monthlyBudgets).every(([key, budget]) => /^\d{4}-(0[1-9]|1[0-2])$/.test(key)
-    && object(budget) && amount(budget.salary) && list(budget.fixedExpenses, fixed))) return false;
+    && object(budget) && amount(budget.salary) && list(budget.fixedExpenses, fixed)
+    && (budget.salaryMode == null || ["fixed", "variable"].includes(budget.salaryMode))
+    && (budget.salaryDay == null || (Number.isInteger(budget.salaryDay) && budget.salaryDay >= 1 && budget.salaryDay <= 31))
+    && (budget.salaryConfirmed == null || typeof budget.salaryConfirmed === "boolean"))) return false;
   if (!Object.values(state.notified).every((flag) => typeof flag === "boolean")) return false;
   return !state.appearance.backgroundImage || (typeof state.appearance.backgroundImage === "string"
     && /^data:image\/(png|jpeg|webp|svg\+xml)[;,]/i.test(state.appearance.backgroundImage));

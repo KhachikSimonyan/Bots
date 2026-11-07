@@ -56,6 +56,13 @@ const els = {
   allMonthsTotal: document.getElementById("allMonthsTotal"),
   monthSelect: document.getElementById("monthSelect"),
   monthList: document.getElementById("monthList"),
+  salaryForm: document.getElementById("salaryForm"),
+  salaryMode: document.getElementById("salaryMode"),
+  salaryDay: document.getElementById("salaryDay"),
+  salaryDayRow: document.getElementById("salaryDayRow"),
+  salaryDayHint: document.getElementById("salaryDayHint"),
+  salaryInputLabel: document.getElementById("salaryInputLabel"),
+  salaryStatus: document.getElementById("salaryStatus"),
   salaryInput: document.getElementById("salaryInput"),
   fixedList: document.getElementById("fixedList"),
   fixedForm: document.getElementById("fixedForm"),
@@ -234,11 +241,34 @@ function bindEvents() {
     });
   });
 
-  els.salaryInput.addEventListener("change", () => {
+  const saveSalary = () => {
     const amount = parseAmount(els.salaryInput.value, "Աշխատավարձ", true);
     if (amount === null) return;
     state.salary = amount;
-    updateCurrentMonthBudget();
+    updateCurrentMonthBudget(true);
+    if (saveState() === false) return;
+    render();
+  };
+  els.salaryInput.addEventListener("change", saveSalary);
+  els.salaryForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveSalary();
+  });
+  els.salaryMode.addEventListener("change", () => {
+    state.salaryMode = els.salaryMode.value === "variable" ? "variable" : "fixed";
+    updateCurrentMonthBudget(true);
+    if (saveState() === false) return;
+    render();
+  });
+  els.salaryDay.addEventListener("change", () => {
+    const day = Number(els.salaryDay.value);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      showMessage("Աշխատավարձի օրը պետք է լինի 1-ից 31։");
+      renderSalarySettings();
+      return;
+    }
+    state.salaryDay = day;
+    updateCurrentMonthBudget(false);
     if (saveState() === false) return;
     render();
   });
@@ -383,7 +413,7 @@ function addScheduledTask(event) {
 
 function render() {
   renderView();
-  if (document.activeElement !== els.salaryInput) els.salaryInput.value = String(state.salary ?? 0);
+  renderSalarySettings();
   renderBudget();
   renderMonthlySummary();
   renderFixedExpenses();
@@ -393,6 +423,24 @@ function render() {
   renderAccordions();
   renderSyncStatus();
   applyBackgroundImage();
+}
+
+function renderSalarySettings() {
+  const variable = state.salaryMode === "variable";
+  const budget = state.monthlyBudgets[getMonthKey(new Date())];
+  const confirmed = !variable || budget?.salaryConfirmed === true;
+  els.salaryMode.value = variable ? "variable" : "fixed";
+  els.salaryDay.value = String(state.salaryDay);
+  els.salaryDayRow.hidden = variable;
+  els.salaryDayHint.hidden = variable;
+  els.salaryInputLabel.textContent = variable ? "Այս ամսվա աշխատավարձ" : "Ֆիքսված գումար";
+  if (document.activeElement !== els.salaryInput) els.salaryInput.value = String(state.salary ?? 0);
+  els.salaryStatus.classList.toggle("is-required", !confirmed);
+  els.salaryStatus.textContent = variable
+    ? confirmed
+      ? "Այս ամսվա գումարը հաստատված է։ Հաջորդ ամիս այն պետք է նորից մուտքագրեք։"
+      : "Այս ամսվա աշխատավարձը դեռ մուտքագրված չէ։ Գրեք գումարը և սեղմեք «Պահել»։"
+    : `Ամսական գումարը պահպանված է՝ ${formatMoney(state.salary)}։ Ստացման օր՝ ${state.salaryDay}։`;
 }
 
 function renderView() {
@@ -567,7 +615,11 @@ function renderMonthExpenses(monthKey) {
   const budget = getBudgetForMonth(monthKey);
   const fixedTotal = sum(budget.fixedExpenses);
   const spent = sum(expenses);
-  addMonthTotalRow("Աշխատավարձ", formatMoney(budget.salary));
+  const salaryLabel = budget.salaryMode === "fixed"
+    ? `Աշխատավարձ (${budget.salaryDay || state.salaryDay}-ին)` : "Աշխատավարձ";
+  const salaryValue = budget.salaryMode === "variable" && budget.salaryConfirmed === false
+    ? "Չի մուտքագրվել" : formatMoney(budget.salary);
+  addMonthTotalRow(salaryLabel, salaryValue);
   addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal));
   addMonthTotalRow("Ընդհանուր ծախս", formatMoney(spent));
   addMonthTotalRow("Ազատ մնացորդ", formatMoney(budget.salary - fixedTotal - spent));
@@ -840,8 +892,13 @@ function loadState() {
 }
 
 function normalizeState(value) {
+  const salaryMode = value.salaryMode === "variable" ? "variable" : "fixed";
+  const salaryDay = Number.isInteger(Number(value.salaryDay)) && Number(value.salaryDay) >= 1 && Number(value.salaryDay) <= 31
+    ? Number(value.salaryDay) : 1;
   return {
     salary: Math.max(0, Number(value.salary || 0)),
+    salaryMode,
+    salaryDay,
     fixedExpenses: Array.isArray(value.fixedExpenses) ? value.fixedExpenses : [],
     expenses: Array.isArray(value.expenses) ? value.expenses : [],
     recurringTasks: Array.isArray(value.recurringTasks) ? value.recurringTasks : [],
@@ -854,13 +911,24 @@ function normalizeState(value) {
 
 function ensureCurrentMonthBudget() {
   const key = getMonthKey(new Date());
-  if (!state.monthlyBudgets[key]) updateCurrentMonthBudget();
+  const current = state.monthlyBudgets[key];
+  if (current) {
+    if (state.salaryMode === "variable") state.salary = Number(current.salary || 0);
+    return;
+  }
+  if (state.salaryMode === "variable") state.salary = 0;
+  updateCurrentMonthBudget(state.salaryMode === "fixed");
 }
 
-function updateCurrentMonthBudget() {
+function updateCurrentMonthBudget(confirmSalary = false) {
   const key = getMonthKey(new Date());
+  const previous = state.monthlyBudgets[key];
+  const salaryConfirmed = state.salaryMode === "fixed" || confirmSalary || previous?.salaryConfirmed === true;
   state.monthlyBudgets[key] = {
-    salary: Number(state.salary || 0),
+    salary: salaryConfirmed ? Number(state.salary || 0) : 0,
+    salaryMode: state.salaryMode,
+    salaryDay: state.salaryDay,
+    salaryConfirmed,
     fixedExpenses: state.fixedExpenses.map((item) => ({ ...item })),
     savedAt: new Date().toISOString(),
   };
@@ -868,9 +936,19 @@ function updateCurrentMonthBudget() {
 
 function getBudgetForMonth(monthKey) {
   if (state.monthlyBudgets[monthKey]) return state.monthlyBudgets[monthKey];
-  if (monthKey === getMonthKey(new Date())) return { salary: state.salary, fixedExpenses: state.fixedExpenses };
+  if (state.salaryMode === "variable") return {
+    salary: 0, salaryMode: "variable", salaryDay: state.salaryDay,
+    salaryConfirmed: false, fixedExpenses: state.fixedExpenses,
+  };
+  if (monthKey === getMonthKey(new Date())) return {
+    salary: state.salary, salaryMode: "fixed", salaryDay: state.salaryDay,
+    salaryConfirmed: true, fixedExpenses: state.fixedExpenses,
+  };
   const earlier = Object.keys(state.monthlyBudgets).filter((key) => key < monthKey).sort().pop();
-  return state.monthlyBudgets[earlier] || { salary: 0, fixedExpenses: [] };
+  return state.monthlyBudgets[earlier] || {
+    salary: state.salary, salaryMode: "fixed", salaryDay: state.salaryDay,
+    salaryConfirmed: true, fixedExpenses: state.fixedExpenses,
+  };
 }
 
 function renderBackgroundPresets() {
