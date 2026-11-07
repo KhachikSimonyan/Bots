@@ -29,6 +29,7 @@ let session;
 let sessionRequest;
 let durableView = KhnayikSync.copy(state);
 let syncDescription = "";
+let messageTimer = 0;
 
 const accordionState = {
   fixed: true,
@@ -56,6 +57,9 @@ const els = {
   periodTotal: document.getElementById("periodTotal"),
   dailyLimit: document.getElementById("dailyLimit"),
   daysLeft: document.getElementById("daysLeft"),
+  setupGuide: document.getElementById("setupGuide"),
+  setupProgress: document.getElementById("setupProgress"),
+  dismissSetup: document.getElementById("dismissSetup"),
   allMonthsTotal: document.getElementById("allMonthsTotal"),
   monthSelect: document.getElementById("monthSelect"),
   monthList: document.getElementById("monthList"),
@@ -149,6 +153,7 @@ const els = {
   cancelDebtEdit: document.getElementById("cancelDebtEdit"),
   debtCount: document.getElementById("debtCount"),
   debtList: document.getElementById("debtList"),
+  appMessage: document.getElementById("appMessage"),
 };
 
 const categoryColors = {
@@ -159,6 +164,9 @@ const categoryColors = {
   "Ժամանց": "#b79bd8",
   "Այլ": "#c9b89b",
 };
+
+const armenianMonths = ["հունվար", "փետրվար", "մարտ", "ապրիլ", "մայիս", "հունիս", "հուլիս", "օգոստոս", "սեպտեմբեր", "հոկտեմբեր", "նոյեմբեր", "դեկտեմբեր"];
+const armenianShortMonths = ["հնվ", "փտր", "մրտ", "ապր", "մյս", "հնս", "հլս", "օգս", "սեպ", "հոկ", "նոյ", "դեկ"];
 
 const defaultBackgrounds = [
   {
@@ -219,14 +227,14 @@ function initTelegram() {
 function initTimePickers() {
   ["recurringTime", "recurringReminderTime", "scheduledTime", "scheduledReminderTime"].forEach((key) => {
     fillTimeSelect(els[`${key}Hour`], 24);
-    fillTimeSelect(els[`${key}Minute`], 60);
+    fillTimeSelect(els[`${key}Minute`], 60, 5);
     resetTimePicker(key);
   });
 }
 
-function fillTimeSelect(select, max) {
+function fillTimeSelect(select, max, step = 1) {
   select.innerHTML = "";
-  for (let value = 0; value < max; value += 1) {
+  for (let value = 0; value < max; value += step) {
     const option = document.createElement("option");
     option.value = String(value).padStart(2, "0");
     option.textContent = String(value).padStart(2, "0");
@@ -270,8 +278,11 @@ function bindEvents() {
   document.querySelectorAll(".tab").forEach((button) => {
     button.addEventListener("click", () => {
       activePeriod = button.dataset.period;
-      document.querySelectorAll(".tab").forEach((tab) => tab.classList.remove("is-active"));
-      button.classList.add("is-active");
+      document.querySelectorAll(".tab").forEach((tab) => {
+        const selected = tab === button;
+        tab.classList.toggle("is-active", selected);
+        tab.setAttribute("aria-selected", String(selected));
+      });
       render();
     });
   });
@@ -322,7 +333,7 @@ function bindEvents() {
       timeZone: existing?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
     if (existing) Object.assign(existing, changes);
-    else state.fixedExpenses.push({ id: crypto.randomUUID(), ...changes, createdAt: new Date().toISOString() });
+    else state.fixedExpenses.push({ id: crypto.randomUUID(), ...changes, paidMonths: [], createdAt: new Date().toISOString() });
     updateCurrentMonthBudget();
     if (saveState() === false) return;
     resetFixedForm();
@@ -375,6 +386,15 @@ function bindEvents() {
   els.scheduledFormToggle.addEventListener("click", () => {
     isScheduledFormOpen = !isScheduledFormOpen;
     renderScheduledFormVisibility();
+  });
+
+  els.dismissSetup.addEventListener("click", () => {
+    state.appearance.onboardingDismissed = true;
+    saveState();
+    renderSetupGuide();
+  });
+  document.querySelectorAll("[data-setup]").forEach((button) => {
+    button.addEventListener("click", () => openSetupStep(button.dataset.setup));
   });
 
   els.saveDebtSettings.addEventListener("click", saveDebtSettings);
@@ -458,6 +478,8 @@ function resetDebtForm() {
   els.debtFormTitle.textContent = "Ավելացնել պարտք";
   els.debtSubmit.textContent = "Պահպանել պարտքը";
   els.cancelDebtEdit.hidden = true;
+  const advanced = els.debtRate.closest?.("details");
+  if (advanced) advanced.open = false;
 }
 
 function addRecurringTask(event) {
@@ -523,6 +545,7 @@ function render() {
   renderView();
   renderSalarySettings();
   renderBudget();
+  renderSetupGuide();
   renderMonthlySummary();
   renderFixedExpenses();
   renderExpenses();
@@ -532,6 +555,33 @@ function render() {
   renderAccordions();
   renderSyncStatus();
   applyBackgroundImage();
+}
+
+function renderSetupGuide() {
+  const steps = {
+    salary: Number(state.salary) > 0,
+    fixed: state.fixedExpenses.length > 0,
+    expense: state.expenses.length > 0,
+  };
+  const complete = Object.values(steps).filter(Boolean).length;
+  els.setupGuide.hidden = state.appearance.onboardingDismissed === true || complete === 3;
+  els.setupProgress.textContent = `${complete}/3 քայլ պատրաստ է`;
+  document.querySelectorAll("[data-setup]").forEach((button) => {
+    const done = steps[button.dataset.setup];
+    button.classList.toggle("is-done", done);
+    button.querySelector("span").textContent = done ? "✓" : ({ salary: "1", fixed: "2", expense: "3" }[button.dataset.setup]);
+  });
+}
+
+function openSetupStep(step) {
+  activeView = "budget";
+  if (step === "salary" || step === "fixed") accordionState.fixed = true;
+  if (step === "expense") accordionState.addExpense = true;
+  renderView();
+  renderAccordions();
+  const target = step === "salary" ? els.salaryInput : step === "fixed" ? els.fixedName : els.expenseTitle;
+  target.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => target.focus(), 250);
 }
 
 function renderSalarySettings() {
@@ -556,7 +606,8 @@ function renderSalarySettings() {
 function renderView() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.view === activeView);
-    button.setAttribute("aria-pressed", String(button.dataset.view === activeView));
+    button.setAttribute("aria-selected", String(button.dataset.view === activeView));
+    button.tabIndex = button.dataset.view === activeView ? 0 : -1;
   });
   els.budgetView.classList.toggle("is-active", activeView === "budget");
   els.tasksView.classList.toggle("is-active", activeView === "tasks");
@@ -564,6 +615,8 @@ function renderView() {
   els.monthsView.classList.toggle("is-active", activeView === "months");
   els.settingsView.classList.toggle("is-active", activeView === "settings");
   els.menuBtn.classList.toggle("is-active", activeView === "settings");
+  els.menuBtn.textContent = activeView === "settings" ? "Վերադառնալ" : "Կարգավորումներ";
+  els.menuBtn.setAttribute("aria-label", activeView === "settings" ? "Վերադառնալ բյուջե" : "Բացել կարգավորումները");
   els.appEyebrow.textContent = {
     budget: "Իմ բյուջեն",
     tasks: "Իմ ժամանակը",
@@ -610,9 +663,9 @@ function renderDebts() {
   els.totalDebt.textContent = formatMoney(result.totalBalance);
   els.debtCapacity.textContent = formatMoney(result.current.capacity);
   els.debtMinimums.textContent = formatMoney(result.current.minimumTotal);
-  els.debtInterest.textContent = result.selected.possible ? formatMoney(result.selected.interest) : "—";
-  els.debtFreeDate.textContent = result.selected.possible && result.selected.debtFreeDate
-    ? new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" }).format(result.selected.debtFreeDate)
+  els.debtInterest.textContent = result.items.length && result.selected.possible ? formatMoney(result.selected.interest) : "—";
+  els.debtFreeDate.textContent = result.items.length && result.selected.possible && result.selected.debtFreeDate
+    ? formatArmenianMonth(result.selected.debtFreeDate)
     : result.items.length ? "Տվյալները բավարար չեն" : "—";
   els.debtReserveNote.textContent = settings.safetyReserve
     ? `Յուրաքանչյուր ամիս պաշտպանվում է ${formatMoney(settings.safetyReserve)}։`
@@ -644,7 +697,7 @@ function renderDebts() {
     const detail = document.createElement("span");
     const plannedDate = result.selected.payoffDates?.[payment.debt.id];
     const plannedText = plannedDate
-      ? ` · պլանային փակում՝ ${new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" }).format(new Date(plannedDate))}`
+      ? ` · պլանային փակում՝ ${formatArmenianMonth(new Date(plannedDate))}`
       : "";
     detail.textContent = (payment.debt.id === result.current.targetId ? "Գլխավոր նպատակ" : "Նվազագույն վճար") + plannedText;
     copy.append(title, detail);
@@ -709,7 +762,7 @@ function renderDebtList(result) {
     const deadline = debt.dueDay ? `վճարման օրը՝ ${debt.dueDay}` : "առանց վերջնաժամկետի՝ պլանով պարտադիր մարում";
     const plannedDate = result.selected.payoffDates?.[debt.id];
     const planned = plannedDate
-      ? ` · պլանային փակում՝ ${new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" }).format(new Date(plannedDate))}`
+      ? ` · պլանային փակում՝ ${formatArmenianMonth(new Date(plannedDate))}`
       : "";
     meta.textContent = `${typeNames[debt.type] || "Այլ"} · ${debt.annualRate}% տարեկան · նվազագույնը ${formatMoney(debt.minimumPayment)} · ${deadline}${planned}${debt.pastDue ? " · ՈՒՇԱՑԱԾ" : ""}`;
     const progress = document.createElement("div");
@@ -815,6 +868,8 @@ function editDebt(id) {
   els.debtFormTitle.textContent = "Խմբագրել պարտքը";
   els.debtSubmit.textContent = "Պահպանել փոփոխությունները";
   els.cancelDebtEdit.hidden = false;
+  const advanced = els.debtRate.closest?.("details");
+  if (advanced) advanced.open = true;
   activeView = "debts";
   renderView();
   els.debtName.focus();
@@ -828,6 +883,8 @@ function renderFixedExpenses() {
   }
 
   state.fixedExpenses.forEach((item) => {
+    const monthKey = getMonthKey(new Date());
+    const paid = (item.paidMonths || []).includes(monthKey);
     const row = document.createElement("div");
     row.className = "fixed-item";
     const copy = document.createElement("div");
@@ -835,10 +892,16 @@ function renderFixedExpenses() {
     const title = document.createElement("strong");
     title.textContent = item.title;
     const meta = document.createElement("span");
-    meta.textContent = `${formatMoney(item.amount)}${item.dueDay ? ` · ամեն ամսվա ${item.dueDay}-ին${item.reminder ? " · հիշեցում՝ 2 օր շուտ" : ""}` : ""}`;
+    meta.textContent = `${formatMoney(item.amount)}${item.dueDay ? ` · ամեն ամսվա ${item.dueDay}-ին${item.reminder ? " · հիշեցում՝ 2 օր շուտ" : ""}` : ""} · ${paid ? "այս ամիս վճարված է" : "այս ամիս չի վճարվել"}`;
     copy.append(title, meta);
     const actions = document.createElement("div");
     actions.className = "fixed-item-actions";
+    const paidButton = document.createElement("button");
+    paidButton.type = "button";
+    paidButton.classList.toggle("is-paid", paid);
+    paidButton.textContent = paid ? "Վճարված" : "Նշել վճարված";
+    paidButton.setAttribute("aria-pressed", String(paid));
+    paidButton.addEventListener("click", () => toggleFixedPaid(item.id));
     const edit = document.createElement("button");
     edit.type = "button";
     edit.textContent = "Փոխել";
@@ -848,10 +911,23 @@ function renderFixedExpenses() {
     remove.textContent = "×";
     remove.setAttribute("aria-label", `Ջնջել ֆիքսված ծախսը՝ ${item.title}`);
     remove.addEventListener("click", () => deleteRecord("fixedExpenses", item.id));
-    actions.append(edit, remove);
+    actions.append(paidButton, edit, remove);
     row.append(copy, actions);
     els.fixedList.append(row);
   });
+}
+
+function toggleFixedPaid(id) {
+  const item = state.fixedExpenses.find((expense) => expense.id === id);
+  if (!item) return;
+  const monthKey = getMonthKey(new Date());
+  item.paidMonths ||= [];
+  item.paidMonths = item.paidMonths.includes(monthKey)
+    ? item.paidMonths.filter((key) => key !== monthKey)
+    : [...item.paidMonths, monthKey].sort();
+  updateCurrentMonthBudget();
+  if (saveState() === false) return;
+  render();
 }
 
 function editFixedExpense(id) {
@@ -976,7 +1052,7 @@ function renderMonthlySummary() {
 
   document.querySelectorAll("[data-month-mode]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.monthMode === activeMonthMode);
-    button.setAttribute("aria-pressed", String(button.dataset.monthMode === activeMonthMode));
+    button.setAttribute("aria-selected", String(button.dataset.monthMode === activeMonthMode));
   });
 
   if (activeMonthMode === "expenses") renderMonthExpenses(selectedMonthKey);
@@ -988,6 +1064,7 @@ function renderMonthExpenses(monthKey) {
   const debtPayments = state.debtPayments.filter((payment) => getMonthKey(new Date(payment.createdAt)) === monthKey);
   const budget = getBudgetForMonth(monthKey);
   const fixedTotal = sum(budget.fixedExpenses);
+  const fixedPaid = budget.fixedExpenses.filter((item) => (item.paidMonths || []).includes(monthKey)).length;
   const spent = sum(expenses);
   const debtPaid = sum(debtPayments);
   const salaryLabel = budget.salaryMode === "fixed"
@@ -996,6 +1073,7 @@ function renderMonthExpenses(monthKey) {
     ? "Չի մուտքագրվել" : formatMoney(budget.salary);
   addMonthTotalRow(salaryLabel, salaryValue);
   addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal));
+  if (budget.fixedExpenses.length) addMonthTotalRow("Վճարված ֆիքսվածներ", `${fixedPaid}/${budget.fixedExpenses.length}`);
   addMonthTotalRow("Առօրյա ծախսեր", formatMoney(spent));
   addMonthTotalRow("Պարտքերի վճարումներ", formatMoney(debtPaid));
   addMonthTotalRow("Ազատ մնացորդ", formatMoney(budget.salary - fixedTotal - spent - debtPaid));
@@ -1295,6 +1373,7 @@ function normalizeState(value) {
     dueDay: Number.isInteger(Number(item.dueDay)) && Number(item.dueDay) >= 1 && Number(item.dueDay) <= 31
       ? Number(item.dueDay) : null,
     reminder: item.reminder !== false,
+    paidMonths: Array.isArray(item.paidMonths) ? item.paidMonths : [],
   }));
   const debts = (Array.isArray(value.debts) ? value.debts : []).map((item) => {
     const balance = Math.max(0, Math.round(Number(item.balance) || 0));
@@ -1518,8 +1597,8 @@ function exportExcel() {
   }).selected.payoffDates;
   const tables = [
     { name: "Ծախսեր", rows: expenseRows() },
-    { name: "Ֆիքսված ծախսեր", rows: [["Անուն", "Գումար", "Վճարման օր", "Հիշեցում"],
-      ...state.fixedExpenses.map((item) => [item.title, item.amount, item.dueDay || "", item.reminder ? "2 օր շուտ" : "Ոչ"])] },
+    { name: "Ֆիքսված ծախսեր", rows: [["Անուն", "Գումար", "Վճարման օր", "Հիշեցում", "Վճարված ամիսներ"],
+      ...state.fixedExpenses.map((item) => [item.title, item.amount, item.dueDay || "", item.reminder ? "2 օր շուտ" : "Ոչ", (item.paidMonths || []).join(", ")])] },
     { name: "Պարտքեր", rows: [["Անուն", "Մնացորդ", "Տարեկան տոկոս", "Նվազագույն վճար", "Վճարման օր", "Պլանային փակում", "Կարգավիճակ"],
       ...state.debts.map((debt) => [debt.title, debt.balance, debt.annualRate, debt.minimumPayment, debt.dueDay || "",
         debtProjection?.[debt.id] ? new Date(debtProjection[debt.id]) : "", debt.balance ? "Ակտիվ" : "Փակված"])] },
@@ -1554,6 +1633,7 @@ function checkReminders() {
     title: `Ֆիքսված ծախս՝ ${item.title}`,
     time: "09:00",
     leadMinutes: 2880,
+    paidMonths: item.paidMonths,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }));
   for (const [type, tasks] of [["scheduled", state.scheduledTasks], ["recurring", state.recurringTasks], ["debt", debtReminders], ["fixed", fixedReminders]]) {
@@ -1675,8 +1755,7 @@ function getMonthOptions() {
       cursor.setMonth(cursor.getMonth() + 1);
     }
   }
-  const formatter = new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" });
-  return [...months].sort().reverse().map((key) => ({ key, label: formatter.format(new Date(`${key}-01T12:00`)) }));
+  return [...months].sort().reverse().map((key) => ({ key, label: formatArmenianMonth(new Date(`${key}-01T12:00`)) }));
 }
 
 function getTasksForMonth(monthKey) {
@@ -1886,31 +1965,24 @@ function formatDays(days) {
   return [...days].sort((a, b) => a - b).map((day) => names[day]).join(", ");
 }
 
+function formatArmenianMonth(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return `${armenianMonths[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 function formatTaskDate(value) {
-  return new Intl.DateTimeFormat("hy-AM", { month: "short", day: "numeric" }).format(new Date(`${value}T00:00`));
+  const date = new Date(`${value}T00:00`);
+  return `${date.getDate()} ${armenianShortMonths[date.getMonth()]}`;
 }
 
 function formatReminderAt(value) {
-  return new Intl.DateTimeFormat("hy-AM", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    hourCycle: "h23",
-  }).format(new Date(value));
+  const date = new Date(value);
+  return `${date.getDate()} ${armenianShortMonths[date.getMonth()]}, ${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat("hy-AM", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    hourCycle: "h23",
-  }).format(new Date(value));
+  const date = new Date(value);
+  return `${date.getDate()} ${armenianShortMonths[date.getMonth()]} ${date.getFullYear()}, ${String(date.getHours()).padStart(2,"0")}:${String(date.getMinutes()).padStart(2,"0")}`;
 }
 
 function parseAmount(value, label, allowZero = false) {
@@ -1943,8 +2015,11 @@ function isDuplicate(items, title) {
 }
 
 function showMessage(message) {
-  if (tg?.initData && tg.isVersionAtLeast?.("6.2") && tg.showAlert) tg.showAlert(message);
-  else window.alert(message);
+  window.clearTimeout(messageTimer);
+  els.appMessage.textContent = message;
+  els.appMessage.hidden = false;
+  tg?.HapticFeedback?.notificationOccurred?.("error");
+  messageTimer = window.setTimeout(() => { els.appMessage.hidden = true; }, 5000);
 }
 
 function getNotificationButtonText() {

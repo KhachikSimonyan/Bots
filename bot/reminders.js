@@ -39,7 +39,7 @@ function scheduleSpecs(state, now) {
     const spec = {
       type: "fixed", id: item.id, title: `Ֆիքսված ծախս՝ ${item.title}`,
       reminder: true, dueDay: item.dueDay, time: "09:00", leadMinutes: 2880,
-      timeZone: item.timeZone || "Asia/Yerevan", createdAt: item.createdAt,
+      paidMonths: item.paidMonths, timeZone: item.timeZone || "Asia/Yerevan", createdAt: item.createdAt,
     };
     const occurrence = KhnayikReminderTime.next(spec, "fixed", now - CATCH_UP);
     if (occurrence) schedules.push({ key: "fixed-" + item.id, spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });

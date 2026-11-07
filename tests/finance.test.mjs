@@ -53,7 +53,8 @@ test("money fields reject altered amounts; salary can be set back to zero", () =
   const { run, messages, elements } = preview();
   for (const amount of ["10,50", "-123", "12abc34", "0.4", "1e2", "0"])
     assert.equal(run(`parseAmount(${JSON.stringify(amount)}, "Ծախս")`), null);
-  assert.equal(messages.length, 6);
+  assert.equal(messages.length, 0);
+  assert.equal(run("els.appMessage.hidden"), false);
   assert.equal(run('parseAmount("123", "Ծախս")'), 123);
   run("state.salary = 100; els.salaryInput.value = '0'; els.salaryInput.events.change()");
   assert.equal(run("state.salary"), 0);
@@ -87,6 +88,16 @@ test("fixed salary repeats while variable salary requires a monthly confirmation
   assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salaryConfirmed"), true);
 });
 
+test("first-use guide reflects the three essential setup steps", () => {
+  const { run } = preview();
+  run("renderSetupGuide()");
+  assert.equal(run("els.setupGuide.hidden"), false);
+  assert.equal(run("els.setupProgress.textContent"), "0/3 քայլ պատրաստ է");
+  run("state.salary=100000;state.fixedExpenses=[{id:'f',title:'Վարձ',amount:1}];state.expenses=[{id:'e',title:'Սնունդ',amount:1,createdAt:new Date().toISOString()}];renderSetupGuide()");
+  assert.equal(run("els.setupGuide.hidden"), true);
+  assert.equal(run("els.setupProgress.textContent"), "3/3 քայլ պատրաստ է");
+});
+
 test("remaining days and daily limit run until the next salary date", () => {
   const { run } = preview();
   assert.equal(run("getDaysUntilNextSalary(new Date(2026,10,7,12),10)"), 3);
@@ -110,6 +121,15 @@ test("debt payments reduce the balance and the spendable monthly budget", () => 
   assert.equal(run("sum(filterDebtPayments('month'))"), 10000);
 });
 
+test("empty debt state has no fake payoff date and Armenian dates stay localized", () => {
+  const { run } = preview();
+  run("renderDebts()");
+  assert.equal(run("els.debtFreeDate.textContent"), "—");
+  assert.equal(run("els.debtInterest.textContent"), "—");
+  assert.equal(run("formatArmenianMonth(new Date(2026,10,1))"), "նոյեմբեր 2026");
+  assert.match(run("formatDate('2026-11-07T13:05:00')"), /7 նոյ 2026, 13:05/);
+});
+
 test("debts may be mandatory without a due date and fixed costs keep a two-day reminder date", () => {
   const { run } = preview();
   run(`els.debtName.value='Անժամկետ պարտք';els.debtBalance.value='80000';els.debtRate.value='0';
@@ -123,6 +143,9 @@ test("debts may be mandatory without a due date and fixed costs keep a two-day r
     els.fixedReminder.checked=true;els.fixedForm.events.submit({preventDefault(){}})`);
   assert.equal(run("state.fixedExpenses[0].dueDay"), 6);
   assert.equal(run("state.fixedExpenses[0].reminder"), true);
+  const fixedId = run("state.fixedExpenses[0].id");
+  run(`toggleFixedPaid(${JSON.stringify(fixedId)})`);
+  assert.equal(run("state.fixedExpenses[0].paidMonths.join(',')"), run("getMonthKey(new Date())"));
 });
 
 test("saving an old expense preserves its ID and date when edited", () => {

@@ -2,7 +2,7 @@
   color-scheme: light;
   font-family: "Noto Sans Armenian", system-ui, sans-serif;
   --ink: #20231f;
-  --muted: #76786f;
+  --muted: #666a61;
   --paper: #fffaf0;
   --soft: #f3ead8;
   --line: #e4d8c3;
@@ -21,6 +21,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 15% 0%, rgba(143, 201, 167, 0.28), transparent 30%),
     linear-gradient(180deg, #f7f3ea 0%, #ece6d9 100%);
@@ -146,13 +147,20 @@ h2 {
 }
 
 .icon-button {
-  width: 44px;
+  min-width: 44px;
   height: 44px;
+  padding: 0 13px;
   border-radius: 14px;
   background: #ffffffb8;
   box-shadow: 0 8px 24px rgba(54, 45, 28, 0.1);
   color: var(--green);
-  font-size: 24px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.settings-button.is-active {
+  background: var(--green);
+  color: white;
 }
 
 .icon-button.is-active {
@@ -288,6 +296,33 @@ h2 {
 .debt-form .secondary-button { width: 100%; }
 .debt-toggle { align-self: end; min-height: 46px; color: var(--ink) !important; }
 
+.debt-form > .advanced-fields { grid-column: 1 / -1; }
+.advanced-fields { min-width: 0; padding: 0; border: 0; }
+.advanced-fields > summary {
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(50, 122, 95, 0.08);
+  color: var(--green);
+  cursor: pointer;
+  font-weight: 800;
+}
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.advanced-grid > label:not(.toggle-row) {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .debt-item-head,
 .debt-item-actions,
 .debt-pay-form {
@@ -303,7 +338,7 @@ h2 {
 .debt-item-progress { height: 7px; overflow: hidden; border-radius: 999px; background: var(--soft); }
 .debt-item-progress i { display: block; height: 100%; border-radius: inherit; background: var(--green); }
 .debt-item-actions { margin-top: 10px; flex-wrap: wrap; }
-.debt-item-actions button { padding: 8px 10px; border-radius: 10px; background: var(--soft); color: var(--ink); }
+.debt-item-actions button { min-height: 44px; padding: 8px 12px; border-radius: 10px; background: var(--soft); color: var(--ink); }
 .debt-pay-form { flex: 1 1 210px; }
 .debt-pay-form input { width: 100%; min-width: 90px; padding: 8px 10px; }
 .debt-pay-form button { flex: none; background: var(--green); color: white; }
@@ -436,6 +471,49 @@ h2 {
   gap: 10px;
   margin-bottom: 12px;
 }
+
+.setup-guide {
+  border-color: rgba(50, 122, 95, 0.28);
+  background: rgba(255, 250, 240, 0.94);
+}
+
+.setup-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.setup-steps button {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 2px 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.setup-steps button > span {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--green);
+  font-weight: 800;
+}
+
+.setup-steps button strong,
+.setup-steps button small { grid-column: 2; }
+.setup-steps button small { color: var(--muted); }
+.setup-steps button.is-done { opacity: 0.72; }
+.setup-steps button.is-done > span { background: var(--green); color: white; }
 
 .history-toggle {
   margin-bottom: 12px;
@@ -587,7 +665,17 @@ select:focus {
   gap: 9px;
 }
 
-.fixed-form > input {
+.form-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.form-field input,
+.form-field select {
   width: 100%;
   padding: 12px 13px;
 }
@@ -628,12 +716,14 @@ select:focus {
 
 .fixed-item-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
 .fixed-item-actions button {
-  min-width: 34px;
-  height: 32px;
+  min-width: 44px;
+  height: 44px;
   padding: 0 9px;
   border: 0;
   border-radius: 10px;
@@ -641,6 +731,11 @@ select:focus {
   color: var(--ink);
   font-size: 12px;
   font-weight: 800;
+}
+
+.fixed-item-actions button.is-paid {
+  background: rgba(50, 122, 95, 0.14);
+  color: var(--green);
 }
 
 .fixed-item-actions button:last-child {
@@ -883,6 +978,10 @@ select:focus {
 
 .day-grid input {
   position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  clip-path: inset(50%);
   opacity: 0;
   pointer-events: none;
 }
@@ -1007,7 +1106,8 @@ select:focus {
 }
 
 .reminder-chip {
-  padding: 6px 8px;
+  min-height: 44px;
+  padding: 6px 10px;
   border-radius: 999px;
   background: rgba(50, 122, 95, 0.12);
   color: var(--green);
@@ -1022,8 +1122,8 @@ select:focus {
 }
 
 .delete-task {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   background: #f4d7cd;
   color: #a33d27;
@@ -1079,8 +1179,8 @@ select:focus {
 }
 
 .expense-side button {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   background: var(--soft);
   color: var(--muted);
@@ -1095,6 +1195,16 @@ select:focus {
   color: var(--green);
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+.history-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .months-card.is-hidden {
@@ -1263,6 +1373,21 @@ select:focus {
 }
 .undo-bar span, .fixed-item strong, .month-line strong { overflow-wrap: anywhere; }
 .undo-bar button { flex: none; border-radius: 10px; padding: 8px; }
+.app-message {
+  position: fixed;
+  z-index: 6;
+  left: 14px;
+  right: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  max-width: 492px;
+  margin-inline: auto;
+  padding: 13px 15px;
+  border-radius: 14px;
+  background: #7f3025;
+  color: white;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
 .task-form, .reminder-box, .task-list, .expense-list, .fixed-list, .month-list {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
@@ -1281,7 +1406,7 @@ select:focus {
   .fixed-form { grid-template-columns: 1fr; }
   .fixed-item { grid-template-columns: minmax(0, 1fr) auto; }
   .app-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .debt-metrics, .debt-settings-grid, .debt-form { grid-template-columns: 1fr; }
+  .debt-metrics, .debt-settings-grid, .debt-form, .advanced-grid { grid-template-columns: 1fr; }
   .debt-hero { grid-template-columns: 1fr; }
   .debt-hero-date { text-align: left; }
 }

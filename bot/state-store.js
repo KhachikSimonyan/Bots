@@ -13,10 +13,12 @@ const day = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v
   && Number.isFinite(Date.parse(value + "T00:00:00Z"))
   && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
 const timestamp = (value) => typeof value === "string" && Number.isFinite(Date.parse(value));
+const month = (value) => typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 const time = (value) => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 const fixed = (item) => amount(item.amount)
   && (item.dueDay == null || (Number.isInteger(item.dueDay) && item.dueDay >= 1 && item.dueDay <= 31))
   && (item.reminder == null || typeof item.reminder === "boolean")
+  && (item.paidMonths == null || (Array.isArray(item.paidMonths) && item.paidMonths.every(month)))
   && (!item.createdAt || timestamp(item.createdAt));
 const task = (item) => time(item.time) && typeof item.reminder === "boolean"
   && (!item.reminderAt || timestamp(item.reminderAt))

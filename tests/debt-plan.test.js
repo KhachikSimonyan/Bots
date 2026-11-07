@@ -49,7 +49,7 @@ test("cloud state accepts an undated mandatory debt and dated fixed reminder", (
   });
   state.fixedExpenses.push({
     id:"f", title:"Վարձ", amount:50000, dueDay:6, reminder:true,
-    createdAt:new Date().toISOString(),
+    paidMonths:["2026-11"], createdAt:new Date().toISOString(),
   });
   assert.equal(validState(state),true);
 });

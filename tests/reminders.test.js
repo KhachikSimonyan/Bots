@@ -62,6 +62,8 @@ test("night-before lead, completed date, and DST-aware wall times", () => {
   const fixedDue = KhnayikReminderTime.next(fixed,"fixed",tick);
   assert.equal(fixedDue.key,"fixed-f-2026-11-06");
   assert.equal(fixedDue.at,tick);
+  const nextAfterPaid = KhnayikReminderTime.next({...fixed,paidMonths:["2026-11"]},"fixed",tick);
+  assert.equal(nextAfterPaid.key,"fixed-f-2026-12-06");
 });
 
 test("delayed and overlapping scans isolate restored accounts, groups and device-only reminders", async t => {

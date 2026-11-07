@@ -19,19 +19,17 @@
           <h1 id="greeting">Բարի օր</h1>
           <small class="sync-status" id="syncStatus" role="status">Պահվում է սարքի մեջ</small>
         </div>
-        <button class="icon-button" id="menuBtn" type="button" aria-label="Կարգավորումներ" title="Կարգավորումներ">
-          <span>⋮</span>
-        </button>
+        <button class="icon-button settings-button" id="menuBtn" type="button" aria-label="Բացել կարգավորումները" title="Կարգավորումներ">Կարգավորումներ</button>
       </section>
 
-      <section class="app-switch" aria-label="Հավելվածի բաժիններ">
-        <button class="switch-button is-active" data-view="budget" type="button">Բյուջե</button>
-        <button class="switch-button" data-view="tasks" type="button">Գործեր</button>
-        <button class="switch-button" data-view="debts" type="button">Պարտքեր</button>
-        <button class="switch-button" data-view="months" type="button">Ամիսներ</button>
+      <section class="app-switch" role="tablist" aria-label="Հավելվածի բաժիններ">
+        <button class="switch-button is-active" id="budgetTab" data-view="budget" type="button" role="tab" aria-selected="true" aria-controls="budgetView">Բյուջե</button>
+        <button class="switch-button" id="tasksTab" data-view="tasks" type="button" role="tab" aria-selected="false" aria-controls="tasksView">Գործեր</button>
+        <button class="switch-button" id="debtsTab" data-view="debts" type="button" role="tab" aria-selected="false" aria-controls="debtsView">Պարտքեր</button>
+        <button class="switch-button" id="monthsTab" data-view="months" type="button" role="tab" aria-selected="false" aria-controls="monthsView">Ամիսներ</button>
       </section>
 
-      <section class="app-view is-active" id="budgetView">
+      <section class="app-view is-active" id="budgetView" role="tabpanel" aria-labelledby="budgetTab">
       <section class="balance-panel">
         <div class="balance-copy">
           <span>Այս ամսվա ազատ գումար</span>
@@ -47,10 +45,10 @@
         </div>
       </section>
 
-      <section class="tabs" aria-label="Ծախսերի ժամանակահատված">
-        <button class="tab is-active" data-period="day" type="button">Օր</button>
-        <button class="tab" data-period="week" type="button">Շաբաթ</button>
-        <button class="tab" data-period="month" type="button">Ամիս</button>
+      <section class="tabs" role="tablist" aria-label="Ծախսերի ժամանակահատված">
+        <button class="tab is-active" data-period="day" type="button" role="tab" aria-selected="true">Օր</button>
+        <button class="tab" data-period="week" type="button" role="tab" aria-selected="false">Շաբաթ</button>
+        <button class="tab" data-period="month" type="button" role="tab" aria-selected="false">Ամիս</button>
       </section>
 
       <section class="summary-grid">
@@ -66,6 +64,21 @@
           <span>Մինչև աշխատավարձ</span>
           <strong id="daysLeft">0</strong>
         </article>
+      </section>
+
+      <section class="card setup-guide" id="setupGuide" aria-labelledby="setupGuideTitle">
+        <div class="section-head">
+          <div>
+            <h2 id="setupGuideTitle">Սկսենք 3 պարզ քայլով</h2>
+            <p id="setupProgress">0/3 քայլ պատրաստ է</p>
+          </div>
+          <button class="text-button" id="dismissSetup" type="button">Թաքցնել</button>
+        </div>
+        <div class="setup-steps">
+          <button type="button" data-setup="salary"><span>1</span><strong>Նշել աշխատավարձը</strong><small>Հաշվարկների հիմքը</small></button>
+          <button type="button" data-setup="fixed"><span>2</span><strong>Ավելացնել ֆիքսված ծախս</strong><small>Վարձ, վարկ, բաժանորդագրություն</small></button>
+          <button type="button" data-setup="expense"><span>3</span><strong>Գրանցել առաջին ծախսը</strong><small>Սկսել իրական պատկերը</small></button>
+        </div>
       </section>
 
       <section class="card accordion-card settings-card">
@@ -101,9 +114,9 @@
         </div>
         <div class="fixed-list" id="fixedList"></div>
         <form class="fixed-form" id="fixedForm">
-          <input id="fixedName" aria-label="Ֆիքսված ծախսի անվանում" placeholder="ֆիքսված ծախս" required />
-          <input id="fixedAmount" aria-label="Ֆիքսված ծախսի գումար՝ դրամ" inputmode="numeric" placeholder="գումար" required />
-          <input id="fixedDueDay" type="number" min="1" max="31" inputmode="numeric" aria-label="Ֆիքսված ծախսի վճարման օրը" placeholder="վճարման օրը" required />
+          <label class="form-field">Անվանում<input id="fixedName" placeholder="օր. տան վարձ" required /></label>
+          <label class="form-field">Գումար<input id="fixedAmount" inputmode="numeric" placeholder="գումար՝ դրամ" required /></label>
+          <label class="form-field">Վճարման օրը<input id="fixedDueDay" type="number" min="1" max="31" inputmode="numeric" placeholder="1–31" required /></label>
           <label class="toggle-row fixed-reminder-toggle">
             <input id="fixedReminder" type="checkbox" checked />
             <span>Հիշեցնել 2 օր շուտ</span>
@@ -124,17 +137,17 @@
         </button>
         <div class="accordion-panel" id="addExpensePanel">
         <form class="expense-form" id="expenseForm">
-          <input id="expenseTitle" aria-label="Ծախսի անվանում" placeholder="օր. սուրճ, մթերք" required />
+          <label class="form-field">Անվանում<input id="expenseTitle" placeholder="օր. սուրճ, մթերք" required /></label>
           <div class="two-col">
-            <input id="expenseAmount" aria-label="Ծախսի գումար՝ ամբողջ դրամով" inputmode="numeric" placeholder="գումար՝ ամբողջ դրամով" required />
-            <select id="expenseCategory" aria-label="Ծախսի կատեգորիա">
+            <label class="form-field">Գումար<input id="expenseAmount" inputmode="numeric" placeholder="ամբողջ դրամով" required /></label>
+            <label class="form-field">Կատեգորիա<select id="expenseCategory">
               <option>Սնունդ</option>
               <option>Տրանսպորտ</option>
               <option>Տուն</option>
               <option>Առողջություն</option>
               <option>Ժամանց</option>
               <option>Այլ</option>
-            </select>
+            </select></label>
           </div>
           <label for="expenseDate">Ծախսի ամսաթիվ</label>
           <input id="expenseDate" type="date" required />
@@ -159,7 +172,7 @@
       </section>
       </section>
 
-      <section class="app-view" id="monthsView">
+      <section class="app-view" id="monthsView" role="tabpanel" aria-labelledby="monthsTab">
         <section class="card accordion-card months-card" id="monthsCard">
           <button class="section-toggle" data-accordion="months" type="button" aria-expanded="true">
             <span class="section-toggle-copy">
@@ -169,18 +182,18 @@
             <span class="section-toggle-meta">Փակել</span>
           </button>
           <div class="accordion-panel" id="monthsPanel">
-          <strong class="total-pill" id="allMonthsTotal">֏0</strong>
+          <div class="history-total"><span>Ընդհանուր գրանցված ելքեր</span><strong class="total-pill" id="allMonthsTotal">֏0</strong></div>
           <select id="monthSelect" class="wide-select" aria-label="Ընտրել ամիսը"></select>
-          <div class="sub-switch" aria-label="Ամսվա տվյալներ">
-            <button class="switch-button is-active" data-month-mode="expenses" type="button">Ծախսեր</button>
-            <button class="switch-button" data-month-mode="tasks" type="button">Գործեր</button>
+          <div class="sub-switch" role="tablist" aria-label="Ամսվա տվյալներ">
+            <button class="switch-button is-active" data-month-mode="expenses" type="button" role="tab" aria-selected="true">Ծախսեր</button>
+            <button class="switch-button" data-month-mode="tasks" type="button" role="tab" aria-selected="false">Գործեր</button>
           </div>
           <div class="month-list" id="monthList"></div>
           </div>
         </section>
       </section>
 
-      <section class="app-view" id="debtsView">
+      <section class="app-view" id="debtsView" role="tabpanel" aria-labelledby="debtsTab">
         <section class="debt-hero">
           <div>
             <span>Ընդհանուր ակտիվ պարտք</span>
@@ -254,26 +267,31 @@
             <label>Մնացորդ
               <input id="debtBalance" inputmode="numeric" placeholder="գումար՝ դրամ" required />
             </label>
-            <label>Տարեկան տոկոս (%)
-              <input id="debtRate" type="number" min="0" max="1000" step="0.01" value="0" required />
-            </label>
             <label>Նվազագույն ամսական վճար
               <input id="debtMinimum" inputmode="numeric" placeholder="գումար՝ դրամ" required />
             </label>
-            <label>Վճարման օրը (ոչ պարտադիր)
-              <input id="debtDueDay" type="number" min="1" max="31" placeholder="դատարկ՝ առանց վերջնաժամկետի" />
-            </label>
-            <label>Ուշացման տույժ
-              <input id="debtLateFee" inputmode="numeric" value="0" />
-            </label>
-            <label class="toggle-row debt-toggle">
-              <input id="debtPastDue" type="checkbox" />
-              <span>Արդեն ուշացած է</span>
-            </label>
-            <label class="toggle-row debt-toggle">
-              <input id="debtReminder" type="checkbox" checked />
-              <span>Եթե օր կա՝ հիշեցնել Telegram-ով մեկ օր շուտ</span>
-            </label>
+            <details class="advanced-fields debt-advanced">
+              <summary>Լրացուցիչ պայմաններ</summary>
+              <div class="advanced-grid">
+                <label>Տարեկան տոկոս (%)
+                  <input id="debtRate" type="number" min="0" max="1000" step="0.01" value="0" required />
+                </label>
+                <label>Վճարման օրը (ոչ պարտադիր)
+                  <input id="debtDueDay" type="number" min="1" max="31" placeholder="դատարկ՝ առանց վերջնաժամկետի" />
+                </label>
+                <label>Ուշացման տույժ
+                  <input id="debtLateFee" inputmode="numeric" value="0" />
+                </label>
+                <label class="toggle-row debt-toggle">
+                  <input id="debtPastDue" type="checkbox" />
+                  <span>Արդեն ուշացած է</span>
+                </label>
+                <label class="toggle-row debt-toggle">
+                  <input id="debtReminder" type="checkbox" checked />
+                  <span>Եթե օր կա՝ հիշեցնել Telegram-ով մեկ օր շուտ</span>
+                </label>
+              </div>
+            </details>
             <button class="primary-button" id="debtSubmit" type="submit">Պահպանել պարտքը</button>
             <button class="secondary-button" id="cancelDebtEdit" type="button" hidden>Չեղարկել խմբագրումը</button>
           </form>
@@ -290,7 +308,7 @@
         </section>
       </section>
 
-      <section class="app-view" id="settingsView">
+      <section class="app-view" id="settingsView" aria-label="Կարգավորումներ">
         <section class="card backup-card">
           <div class="section-head">
             <div>
@@ -324,7 +342,7 @@
         </section>
       </section>
 
-      <section class="app-view" id="tasksView">
+      <section class="app-view" id="tasksView" role="tabpanel" aria-labelledby="tasksTab">
         <section class="task-hero">
           <div>
             <span>Այսօր պլանավորված</span>
@@ -350,7 +368,7 @@
           </button>
           <div class="accordion-panel" id="recurringTasksPanel">
           <form class="task-form" id="recurringTaskForm">
-            <input id="recurringTitle" aria-label="Կրկնվող գործի անվանում" placeholder="օր. մարզվել, դեղ խմել" required />
+            <label class="form-field">Գործի անվանում<input id="recurringTitle" placeholder="օր. մարզվել, դեղ խմել" required /></label>
             <div class="two-col">
               <div class="time-picker" data-time-picker="recurringTime">
                 <select id="recurringTimeHour" aria-label="Ժամ"></select>
@@ -378,16 +396,19 @@
               <option value="30">30 րոպե շուտ</option>
               <option value="60">1 ժամ շուտ</option>
             </select>
-            <div class="reminder-box">
-              <span>Կամ ընտրեք հիշեցման կոնկրետ օրը և ժամը</span>
-              <div class="two-col">
-                <input id="recurringReminderDate" type="date" aria-label="Կրկնվող գործի հատուկ հիշեցման ամսաթիվ" />
-                <div class="time-picker" data-time-picker="recurringReminderTime">
-                  <select id="recurringReminderTimeHour" aria-label="Հիշեցման ժամ"></select>
-                  <select id="recurringReminderTimeMinute" aria-label="Հիշեցման րոպե"></select>
+            <details class="advanced-fields">
+              <summary>Հատուկ հիշեցման օր և ժամ</summary>
+              <div class="reminder-box">
+                <span>Ընտրեք միայն եթե սովորական ժամանակից տարբեր հիշեցում է պետք</span>
+                <div class="two-col">
+                  <input id="recurringReminderDate" type="date" aria-label="Կրկնվող գործի հատուկ հիշեցման ամսաթիվ" />
+                  <div class="time-picker" data-time-picker="recurringReminderTime">
+                    <select id="recurringReminderTimeHour" aria-label="Հիշեցման ժամ"></select>
+                    <select id="recurringReminderTimeMinute" aria-label="Հիշեցման րոպե"></select>
+                  </div>
                 </div>
               </div>
-            </div>
+            </details>
             <button class="primary-button" type="submit">Ավելացնել ֆիքսված գործը</button>
           </form>
           </div>
@@ -421,16 +442,19 @@
               <option value="30">30 րոպե շուտ</option>
               <option value="60">1 ժամ շուտ</option>
             </select>
-            <div class="reminder-box">
-              <span>Կամ ընտրեք հիշեցման կոնկրետ օրը և ժամը</span>
-              <div class="two-col">
-                <input id="scheduledReminderDate" type="date" aria-label="Մեկանգամյա գործի հատուկ հիշեցման ամսաթիվ" />
-                <div class="time-picker" data-time-picker="scheduledReminderTime">
-                  <select id="scheduledReminderTimeHour" aria-label="Հիշեցման ժամ"></select>
-                  <select id="scheduledReminderTimeMinute" aria-label="Հիշեցման րոպե"></select>
+            <details class="advanced-fields">
+              <summary>Հատուկ հիշեցման օր և ժամ</summary>
+              <div class="reminder-box">
+                <span>Ընտրեք միայն եթե գործի ժամից տարբեր հիշեցում է պետք</span>
+                <div class="two-col">
+                  <input id="scheduledReminderDate" type="date" aria-label="Մեկանգամյա գործի հատուկ հիշեցման ամսաթիվ" />
+                  <div class="time-picker" data-time-picker="scheduledReminderTime">
+                    <select id="scheduledReminderTimeHour" aria-label="Հիշեցման ժամ"></select>
+                    <select id="scheduledReminderTimeMinute" aria-label="Հիշեցման րոպե"></select>
+                  </div>
                 </div>
               </div>
-            </div>
+            </details>
             <button class="primary-button" type="submit">Ավելացնել պլանը</button>
           </form>
         </section>
@@ -455,6 +479,8 @@
           </div>
         </section>
       </section>
+
+      <div class="app-message" id="appMessage" role="alert" aria-live="assertive" hidden></div>
     </main>
     <aside id="undoBar" class="undo-bar" hidden>
       <span id="undoMessage" role="status"></span>
