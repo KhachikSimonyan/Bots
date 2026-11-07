@@ -79,9 +79,23 @@ test("fixed salary repeats while variable salary requires a monthly confirmation
   assert.equal(run("state.salary"), 0);
   assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salaryConfirmed"), false);
   assert.equal(run("getBudgetForMonth('2999-12').salary"), 0);
+  run("renderSalarySettings()");
+  assert.equal(run("els.salaryDayRow.hidden"), false);
+  assert.equal(run("els.salaryDayLabel.textContent"), "Այս ամսվա ստացման օրը");
   run("els.salaryInput.value = '175000'; els.salaryForm.events.submit({preventDefault(){}})");
   assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salary"), 175000);
   assert.equal(run("state.monthlyBudgets[getMonthKey(new Date())].salaryConfirmed"), true);
+});
+
+test("remaining days and daily limit run until the next salary date", () => {
+  const { run } = preview();
+  assert.equal(run("getDaysUntilNextSalary(new Date(2026,10,7,12),10)"), 3);
+  assert.equal(run("getDaysUntilNextSalary(new Date(2026,10,10,12),10)"), 30);
+  assert.equal(run("getDaysUntilNextSalary(new Date(2027,1,27,12),31)"), 1);
+  assert.equal(run("getDaysUntilNextSalary(new Date(2027,1,28,12),31)"), 31);
+  run("state.salary = 30000; state.salaryDay = new Date().getDate() === 1 ? 2 : 1; state.monthlyBudgets = {}; updateCurrentMonthBudget(true); renderBudget()");
+  assert.equal(run("els.daysLeft.textContent"), String(run("getDaysUntilNextSalary()")));
+  assert.equal(run("els.dailyLimit.textContent"), run("formatMoney(Math.floor(30000 / getDaysUntilNextSalary()))"));
 });
 
 test("saving an old expense preserves its ID and date when edited", () => {

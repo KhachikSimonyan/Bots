@@ -60,6 +60,7 @@ const els = {
   salaryMode: document.getElementById("salaryMode"),
   salaryDay: document.getElementById("salaryDay"),
   salaryDayRow: document.getElementById("salaryDayRow"),
+  salaryDayLabel: document.getElementById("salaryDayLabel"),
   salaryDayHint: document.getElementById("salaryDayHint"),
   salaryInputLabel: document.getElementById("salaryInputLabel"),
   salaryStatus: document.getElementById("salaryStatus"),
@@ -431,15 +432,16 @@ function renderSalarySettings() {
   const confirmed = !variable || budget?.salaryConfirmed === true;
   els.salaryMode.value = variable ? "variable" : "fixed";
   els.salaryDay.value = String(state.salaryDay);
-  els.salaryDayRow.hidden = variable;
-  els.salaryDayHint.hidden = variable;
+  els.salaryDayRow.hidden = false;
+  els.salaryDayHint.hidden = false;
+  els.salaryDayLabel.textContent = variable ? "Այս ամսվա ստացման օրը" : "Ստացման օրը";
   els.salaryInputLabel.textContent = variable ? "Այս ամսվա աշխատավարձ" : "Ֆիքսված գումար";
   if (document.activeElement !== els.salaryInput) els.salaryInput.value = String(state.salary ?? 0);
   els.salaryStatus.classList.toggle("is-required", !confirmed);
   els.salaryStatus.textContent = variable
     ? confirmed
-      ? "Այս ամսվա գումարը հաստատված է։ Հաջորդ ամիս այն պետք է նորից մուտքագրեք։"
-      : "Այս ամսվա աշխատավարձը դեռ մուտքագրված չէ։ Գրեք գումարը և սեղմեք «Պահել»։"
+      ? "Այս ամսվա գումարն ու ստացման օրը հաստատված են։ Հաջորդ ամիս դրանք պետք է նորից ստուգեք։"
+      : "Այս ամսվա աշխատավարձը դեռ մուտքագրված չէ։ Նշեք օրը, գրեք գումարը և սեղմեք «Պահել»։"
     : `Ամսական գումարը պահպանված է՝ ${formatMoney(state.salary)}։ Ստացման օր՝ ${state.salaryDay}։`;
 }
 
@@ -468,7 +470,7 @@ function renderBudget() {
   const base = currentBudget.salary - fixedTotal;
   const free = base - monthSpent;
   const usage = base > 0 ? Math.round(monthSpent / base * 100) : 0;
-  const daysLeft = getDaysLeftInMonth();
+  const daysLeft = getDaysUntilNextSalary();
   const dailyLimit = Math.max(0, Math.floor(free / daysLeft));
 
   els.freeMoney.textContent = formatMoney(free);
@@ -1370,10 +1372,31 @@ function startOfWeek(date) {
   return copy;
 }
 
-function getDaysLeftInMonth() {
-  const now = new Date();
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return lastDay - now.getDate() + 1;
+function getDaysUntilNextSalary(now = new Date(), salaryDay = state.salaryDay) {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const requestedDay = Math.min(31, Math.max(1, Number(salaryDay) || 1));
+  const effectiveDay = (targetYear, targetMonth) => Math.min(
+    requestedDay,
+    new Date(targetYear, targetMonth + 1, 0).getDate(),
+  );
+
+  let targetYear = year;
+  let targetMonth = month;
+  let targetDay = effectiveDay(targetYear, targetMonth);
+  if (today >= targetDay) {
+    targetMonth += 1;
+    if (targetMonth === 12) {
+      targetYear += 1;
+      targetMonth = 0;
+    }
+    targetDay = effectiveDay(targetYear, targetMonth);
+  }
+
+  const todayOrdinal = Date.UTC(year, month, today);
+  const targetOrdinal = Date.UTC(targetYear, targetMonth, targetDay);
+  return Math.max(1, Math.round((targetOrdinal - todayOrdinal) / 86400000));
 }
 
 function getPeriodLabel() {
