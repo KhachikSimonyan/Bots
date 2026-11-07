@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import test from "node:test";
+import { emptyState, validState } from "../bot/state-store.js";
 
 const context = vm.createContext({ console, Date });
 vm.runInContext(readFileSync(new URL("../src/debt-plan.js", import.meta.url), "utf8"), context);
@@ -35,4 +36,20 @@ test("avalanche projection costs no more interest than snowball", () => {
   assert.ok(result.selected.possible);
   assert.ok(result.avalanche.interest <= result.snowball.interest);
   assert.ok(result.selected.months > 0);
+  assert.deepEqual(Object.keys(result.selected.payoffDates).sort(), ["card","small"]);
+  assert.ok(Date.parse(result.snowball.payoffDates.small) <= Date.parse(result.snowball.payoffDates.card));
+});
+
+test("cloud state accepts an undated mandatory debt and dated fixed reminder", () => {
+  const state = emptyState();
+  state.debts.push({
+    id:"d", title:"Անժամկետ", type:"personal", balance:80000, originalBalance:80000,
+    annualRate:0, minimumPayment:10000, dueDay:null, lateFee:0, paidTotal:0,
+    pastDue:false, reminder:false, createdAt:new Date().toISOString(), closedAt:"",
+  });
+  state.fixedExpenses.push({
+    id:"f", title:"Վարձ", amount:50000, dueDay:6, reminder:true,
+    createdAt:new Date().toISOString(),
+  });
+  assert.equal(validState(state),true);
 });

@@ -14,7 +14,10 @@ const day = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v
   && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
 const timestamp = (value) => typeof value === "string" && Number.isFinite(Date.parse(value));
 const time = (value) => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
-const fixed = (item) => amount(item.amount);
+const fixed = (item) => amount(item.amount)
+  && (item.dueDay == null || (Number.isInteger(item.dueDay) && item.dueDay >= 1 && item.dueDay <= 31))
+  && (item.reminder == null || typeof item.reminder === "boolean")
+  && (!item.createdAt || timestamp(item.createdAt));
 const task = (item) => time(item.time) && typeof item.reminder === "boolean"
   && (!item.reminderAt || timestamp(item.reminderAt))
   && (item.leadMinutes == null || (Number.isInteger(item.leadMinutes) && item.leadMinutes >= 0 && item.leadMinutes <= 1440))
@@ -22,7 +25,7 @@ const task = (item) => time(item.time) && typeof item.reminder === "boolean"
 const debt = (item) => amount(item.balance) && amount(item.originalBalance) && item.originalBalance >= item.balance
   && Number.isFinite(item.annualRate) && item.annualRate >= 0 && item.annualRate <= 1000
   && amount(item.minimumPayment) && amount(item.lateFee) && amount(item.paidTotal)
-  && Number.isInteger(item.dueDay) && item.dueDay >= 1 && item.dueDay <= 31
+  && (item.dueDay == null || (Number.isInteger(item.dueDay) && item.dueDay >= 1 && item.dueDay <= 31))
   && ["card", "loan", "personal", "tax", "other"].includes(item.type)
   && typeof item.pastDue === "boolean" && typeof item.reminder === "boolean"
   && (!item.createdAt || timestamp(item.createdAt)) && (!item.closedAt || timestamp(item.closedAt));

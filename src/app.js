@@ -11,6 +11,7 @@ let activeView = "budget";
 let activeMonthMode = "expenses";
 let selectedMonthKey = "";
 let editingExpenseId = "";
+let editingFixedId = "";
 let editingDebtId = "";
 let displayedDay = getDateKey(new Date());
 let rolloverTimer;
@@ -71,6 +72,10 @@ const els = {
   fixedForm: document.getElementById("fixedForm"),
   fixedName: document.getElementById("fixedName"),
   fixedAmount: document.getElementById("fixedAmount"),
+  fixedDueDay: document.getElementById("fixedDueDay"),
+  fixedReminder: document.getElementById("fixedReminder"),
+  fixedSubmit: document.getElementById("fixedSubmit"),
+  cancelFixedEdit: document.getElementById("cancelFixedEdit"),
   expenseForm: document.getElementById("expenseForm"),
   expenseTitle: document.getElementById("expenseTitle"),
   expenseAmount: document.getElementById("expenseAmount"),
@@ -307,15 +312,23 @@ function bindEvents() {
     event.preventDefault();
     const title = normalizeTitle(els.fixedName.value);
     const amount = parseAmount(els.fixedAmount.value, "Ֆիքսված ծախս");
+    const dueDay = Number(els.fixedDueDay.value);
     if (!title || amount === null) return;
-    if (isDuplicate(state.fixedExpenses, title)) return showMessage("Այս ֆիքսված ծախսն արդեն կա");
-
-    state.fixedExpenses.push({ id: crypto.randomUUID(), title, amount });
+    if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) return showMessage("Վճարման օրը պետք է լինի 1-ից 31։");
+    const existing = state.fixedExpenses.find((item) => item.id === editingFixedId);
+    if (isDuplicate(state.fixedExpenses.filter((item) => item.id !== editingFixedId), title)) return showMessage("Այս ֆիքսված ծախսն արդեն կա");
+    const changes = {
+      title, amount, dueDay, reminder: els.fixedReminder.checked,
+      timeZone: existing?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    if (existing) Object.assign(existing, changes);
+    else state.fixedExpenses.push({ id: crypto.randomUUID(), ...changes, createdAt: new Date().toISOString() });
     updateCurrentMonthBudget();
     if (saveState() === false) return;
-    els.fixedForm.reset();
+    resetFixedForm();
     render();
   });
+  els.cancelFixedEdit.addEventListener("click", resetFixedForm);
 
   els.expenseForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -404,10 +417,11 @@ function saveDebt(event) {
   const minimumPayment = parseAmount(els.debtMinimum.value, "Նվազագույն վճար", true);
   const lateFee = parseAmount(els.debtLateFee.value, "Ուշացման տույժ", true);
   const annualRate = Number(els.debtRate.value);
-  const dueDay = Number(els.debtDueDay.value);
+  const dueDayText = els.debtDueDay.value.trim();
+  const dueDay = dueDayText ? Number(dueDayText) : null;
   if (!title || balance === null || minimumPayment === null || lateFee === null) return;
   if (!Number.isFinite(annualRate) || annualRate < 0 || annualRate > 1000) return showMessage("Տարեկան տոկոսը պետք է լինի 0-ից 1000 միջակայքում։");
-  if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) return showMessage("Վճարման օրը պետք է լինի 1-ից 31։");
+  if (dueDay !== null && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)) return showMessage("Վճարման օրը պետք է լինի 1-ից 31 կամ դաշտը թողեք դատարկ։");
   const existing = state.debts.find((debt) => debt.id === editingDebtId);
   const debt = {
     id: existing?.id || crypto.randomUUID(),
@@ -421,7 +435,7 @@ function saveDebt(event) {
     lateFee,
     paidTotal: Number(existing?.paidTotal || 0),
     pastDue: els.debtPastDue.checked,
-    reminder: els.debtReminder.checked,
+    reminder: dueDay !== null && els.debtReminder.checked,
     timeZone: existing?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     createdAt: existing?.createdAt || new Date().toISOString(),
     closedAt: "",
@@ -438,7 +452,7 @@ function resetDebtForm() {
   editingDebtId = "";
   els.debtForm.reset();
   els.debtRate.value = "0";
-  els.debtDueDay.value = "1";
+  els.debtDueDay.value = "";
   els.debtLateFee.value = "0";
   els.debtReminder.checked = true;
   els.debtFormTitle.textContent = "Ավելացնել պարտք";
@@ -628,14 +642,18 @@ function renderDebts() {
     const title = document.createElement("strong");
     title.textContent = payment.debt.title;
     const detail = document.createElement("span");
-    detail.textContent = payment.debt.id === result.current.targetId ? "Գլխավոր նպատակ" : "Նվազագույն վճար";
+    const plannedDate = result.selected.payoffDates?.[payment.debt.id];
+    const plannedText = plannedDate
+      ? ` · պլանային փակում՝ ${new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" }).format(new Date(plannedDate))}`
+      : "";
+    detail.textContent = (payment.debt.id === result.current.targetId ? "Գլխավոր նպատակ" : "Նվազագույն վճար") + plannedText;
     copy.append(title, detail);
     const amount = document.createElement("b");
     amount.textContent = formatMoney(payment.amount);
     line.append(copy, amount);
     els.debtPaymentPlan.append(line);
   }
-  renderDebtList();
+  renderDebtList(result);
 }
 
 function debtPlanInputs() {
@@ -667,7 +685,7 @@ function averageMonthlyExpenses() {
   return totals.get(current) || 0;
 }
 
-function renderDebtList() {
+function renderDebtList(result) {
   els.debtList.innerHTML = "";
   const activeCount = state.debts.filter((debt) => debt.balance > 0).length;
   els.debtCount.textContent = activeCount ? `${activeCount} ակտիվ պարտք` : state.debts.length ? "Բոլոր պարտքերը փակված են" : "Դեռ պարտք չկա";
@@ -688,7 +706,12 @@ function renderDebtList() {
     head.append(title,balance);
     const meta = document.createElement("div");
     meta.className = "debt-item-meta";
-    meta.textContent = `${typeNames[debt.type] || "Այլ"} · ${debt.annualRate}% տարեկան · նվազագույնը ${formatMoney(debt.minimumPayment)} · օրը՝ ${debt.dueDay}${debt.pastDue ? " · ՈՒՇԱՑԱԾ" : ""}`;
+    const deadline = debt.dueDay ? `վճարման օրը՝ ${debt.dueDay}` : "առանց վերջնաժամկետի՝ պլանով պարտադիր մարում";
+    const plannedDate = result.selected.payoffDates?.[debt.id];
+    const planned = plannedDate
+      ? ` · պլանային փակում՝ ${new Intl.DateTimeFormat("hy-AM", { month: "long", year: "numeric" }).format(new Date(plannedDate))}`
+      : "";
+    meta.textContent = `${typeNames[debt.type] || "Այլ"} · ${debt.annualRate}% տարեկան · նվազագույնը ${formatMoney(debt.minimumPayment)} · ${deadline}${planned}${debt.pastDue ? " · ՈՒՇԱՑԱԾ" : ""}`;
     const progress = document.createElement("div");
     progress.className = "debt-item-progress";
     const bar = document.createElement("i");
@@ -785,7 +808,7 @@ function editDebt(id) {
   els.debtBalance.value = String(debt.balance);
   els.debtRate.value = String(debt.annualRate);
   els.debtMinimum.value = String(debt.minimumPayment);
-  els.debtDueDay.value = String(debt.dueDay);
+  els.debtDueDay.value = debt.dueDay ? String(debt.dueDay) : "";
   els.debtLateFee.value = String(debt.lateFee);
   els.debtPastDue.checked = debt.pastDue;
   els.debtReminder.checked = debt.reminder;
@@ -807,14 +830,49 @@ function renderFixedExpenses() {
   state.fixedExpenses.forEach((item) => {
     const row = document.createElement("div");
     row.className = "fixed-item";
-    row.innerHTML = `<strong></strong><span></span><button type="button">×</button>`;
-    row.querySelector("strong").textContent = item.title;
-    row.querySelector("span").textContent = formatMoney(item.amount);
-    const remove = row.querySelector("button");
+    const copy = document.createElement("div");
+    copy.className = "fixed-item-copy";
+    const title = document.createElement("strong");
+    title.textContent = item.title;
+    const meta = document.createElement("span");
+    meta.textContent = `${formatMoney(item.amount)}${item.dueDay ? ` · ամեն ամսվա ${item.dueDay}-ին${item.reminder ? " · հիշեցում՝ 2 օր շուտ" : ""}` : ""}`;
+    copy.append(title, meta);
+    const actions = document.createElement("div");
+    actions.className = "fixed-item-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Փոխել";
+    edit.addEventListener("click", () => editFixedExpense(item.id));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
     remove.setAttribute("aria-label", `Ջնջել ֆիքսված ծախսը՝ ${item.title}`);
     remove.addEventListener("click", () => deleteRecord("fixedExpenses", item.id));
+    actions.append(edit, remove);
+    row.append(copy, actions);
     els.fixedList.append(row);
   });
+}
+
+function editFixedExpense(id) {
+  const item = state.fixedExpenses.find((expense) => expense.id === id);
+  if (!item) return;
+  editingFixedId = id;
+  els.fixedName.value = item.title;
+  els.fixedAmount.value = String(item.amount);
+  els.fixedDueDay.value = item.dueDay ? String(item.dueDay) : "1";
+  els.fixedReminder.checked = item.reminder !== false;
+  els.fixedSubmit.textContent = "Պահպանել";
+  els.cancelFixedEdit.hidden = false;
+  els.fixedName.focus();
+}
+
+function resetFixedForm() {
+  editingFixedId = "";
+  els.fixedForm.reset();
+  els.fixedReminder.checked = true;
+  els.fixedSubmit.textContent = "Ավելացնել";
+  els.cancelFixedEdit.hidden = true;
 }
 
 function renderExpenses() {
@@ -1232,6 +1290,12 @@ function normalizeState(value) {
   const salaryMode = value.salaryMode === "variable" ? "variable" : "fixed";
   const salaryDay = Number.isInteger(Number(value.salaryDay)) && Number(value.salaryDay) >= 1 && Number(value.salaryDay) <= 31
     ? Number(value.salaryDay) : 1;
+  const fixedExpenses = (Array.isArray(value.fixedExpenses) ? value.fixedExpenses : []).map((item) => ({
+    ...item,
+    dueDay: Number.isInteger(Number(item.dueDay)) && Number(item.dueDay) >= 1 && Number(item.dueDay) <= 31
+      ? Number(item.dueDay) : null,
+    reminder: item.reminder !== false,
+  }));
   const debts = (Array.isArray(value.debts) ? value.debts : []).map((item) => {
     const balance = Math.max(0, Math.round(Number(item.balance) || 0));
     const paidTotal = Math.max(0, Math.round(Number(item.paidTotal) || 0));
@@ -1241,7 +1305,8 @@ function normalizeState(value) {
       originalBalance: Math.max(balance, paidTotal + balance, Math.round(Number(item.originalBalance) || 0)),
       annualRate: Math.max(0, Number(item.annualRate) || 0),
       minimumPayment: Math.max(0, Math.round(Number(item.minimumPayment) || 0)),
-      dueDay: Math.min(31, Math.max(1, Math.round(Number(item.dueDay) || 1))),
+      dueDay: Number.isInteger(Number(item.dueDay)) && Number(item.dueDay) >= 1 && Number(item.dueDay) <= 31
+        ? Number(item.dueDay) : null,
       lateFee: Math.max(0, Math.round(Number(item.lateFee) || 0)),
       paidTotal,
       type: ["card", "loan", "personal", "tax", "other"].includes(item.type) ? item.type : "other",
@@ -1256,7 +1321,7 @@ function normalizeState(value) {
     salary: Math.max(0, Number(value.salary || 0)),
     salaryMode,
     salaryDay,
-    fixedExpenses: Array.isArray(value.fixedExpenses) ? value.fixedExpenses : [],
+    fixedExpenses,
     expenses: Array.isArray(value.expenses) ? value.expenses : [],
     recurringTasks: Array.isArray(value.recurringTasks) ? value.recurringTasks : [],
     scheduledTasks: Array.isArray(value.scheduledTasks) ? value.scheduledTasks : [],
@@ -1444,10 +1509,20 @@ function exportExcel() {
     ...state.scheduledTasks.map((task) => [task.title, "Մեկանգամյա", new Date(`${task.date}T${task.time}`), task.reminder ? "Այո" : "Ոչ"]),
     ...state.recurringTasks.map((task) => [task.title, "Կրկնվող", `${formatDays(task.days)} ${task.time}`, task.reminder ? "Այո" : "Ոչ"]),
   ];
+  const projectionInputs = debtPlanInputs();
+  const debtProjection = KhnayikDebt.analyze({
+    debts: state.debts,
+    available: projectionInputs.available,
+    recurringAvailable: projectionInputs.recurringAvailable,
+    strategy: state.debtSettings.strategy,
+  }).selected.payoffDates;
   const tables = [
     { name: "Ծախսեր", rows: expenseRows() },
-    { name: "Պարտքեր", rows: [["Անուն", "Մնացորդ", "Տարեկան տոկոս", "Նվազագույն վճար", "Վճարման օր", "Կարգավիճակ"],
-      ...state.debts.map((debt) => [debt.title, debt.balance, debt.annualRate, debt.minimumPayment, debt.dueDay, debt.balance ? "Ակտիվ" : "Փակված"])] },
+    { name: "Ֆիքսված ծախսեր", rows: [["Անուն", "Գումար", "Վճարման օր", "Հիշեցում"],
+      ...state.fixedExpenses.map((item) => [item.title, item.amount, item.dueDay || "", item.reminder ? "2 օր շուտ" : "Ոչ"])] },
+    { name: "Պարտքեր", rows: [["Անուն", "Մնացորդ", "Տարեկան տոկոս", "Նվազագույն վճար", "Վճարման օր", "Պլանային փակում", "Կարգավիճակ"],
+      ...state.debts.map((debt) => [debt.title, debt.balance, debt.annualRate, debt.minimumPayment, debt.dueDay || "",
+        debtProjection?.[debt.id] ? new Date(debtProjection[debt.id]) : "", debt.balance ? "Ակտիվ" : "Փակված"])] },
     { name: "Պարտքի վճարումներ", rows: [["Պարտք", "Գումար", "Ամսաթիվ"],
       ...state.debtPayments.map((payment) => [payment.title, payment.amount, new Date(payment.createdAt)])] },
     { name: "Գործեր", rows: tasks },
@@ -1468,18 +1543,26 @@ function checkReminders() {
   if (reminderChannel() === "telegram") return;
   let changed = false;
   const defaultZone = CLOUD_MODE ? "Asia/Yerevan" : Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const debtReminders = state.debts.filter((debt) => debt.balance > 0).map((debt) => ({
+  const debtReminders = state.debts.filter((debt) => debt.balance > 0 && debt.dueDay).map((debt) => ({
     ...debt,
     title: `Պարտքի վճարման օր՝ ${debt.title}`,
     time: "09:00",
     leadMinutes: 1440,
   }));
-  for (const [type, tasks] of [["scheduled", state.scheduledTasks], ["recurring", state.recurringTasks], ["debt", debtReminders]]) {
+  const fixedReminders = state.fixedExpenses.filter((item) => item.dueDay).map((item) => ({
+    ...item,
+    title: `Ֆիքսված ծախս՝ ${item.title}`,
+    time: "09:00",
+    leadMinutes: 2880,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }));
+  for (const [type, tasks] of [["scheduled", state.scheduledTasks], ["recurring", state.recurringTasks], ["debt", debtReminders], ["fixed", fixedReminders]]) {
     for (const task of tasks) {
       let occurrence = KhnayikReminderTime.next(task, type, from, defaultZone);
       while (occurrence && occurrence.at <= now) {
         if (!state.notified[occurrence.key]) {
-          notifyTask(task.title, type === "debt" ? "Պարտքի հիշեցում" : "Գործի հիշեցում");
+          const heading = type === "debt" ? "Պարտքի հիշեցում" : type === "fixed" ? "Ֆիքսված ծախսի հիշեցում" : "Գործի հիշեցում";
+          notifyTask(task.title, heading);
           state.notified[occurrence.key] = true;
           changed = true;
         }

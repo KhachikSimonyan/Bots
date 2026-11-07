@@ -73,9 +73,10 @@ globalThis.KhnayikDebt = (() => {
     let items = active(debts).map((debt) => ({ ...debt }));
     let interest = 0;
     let months = 0;
-    if (!items.length) return { possible: true, months: 0, interest: 0, debtFreeDate: startDate };
+    const payoffDates = {};
+    if (!items.length) return { possible: true, months: 0, interest: 0, debtFreeDate: startDate, payoffDates };
     if (!capacity || items.reduce((sum, debt) => sum + Math.min(debt.balance, debt.minimumPayment), 0) > capacity) {
-      return { possible: false, months: null, interest: null, debtFreeDate: null };
+      return { possible: false, months: null, interest: null, debtFreeDate: null, payoffDates };
     }
     while (items.length && months < MONTH_LIMIT) {
       months += 1;
@@ -85,16 +86,19 @@ globalThis.KhnayikDebt = (() => {
         interest += charge;
       }
       const plan = allocate(items, capacity, strategy);
-      if (plan.shortfall) return { possible: false, months: null, interest: null, debtFreeDate: null };
+      if (plan.shortfall) return { possible: false, months: null, interest: null, debtFreeDate: null, payoffDates: {} };
       for (const payment of plan.payments) {
         const debt = items.find((item) => item.id === payment.debt.id);
         debt.balance = Math.max(0, debt.balance - payment.amount);
+        if (debt.balance === 0 && !payoffDates[debt.id]) {
+          payoffDates[debt.id] = new Date(startDate.getFullYear(), startDate.getMonth() + months, 1, 12).toISOString();
+        }
       }
       items = items.filter((debt) => debt.balance > 0);
     }
-    if (items.length) return { possible: false, months: null, interest: null, debtFreeDate: null };
+    if (items.length) return { possible: false, months: null, interest: null, debtFreeDate: null, payoffDates: {} };
     const debtFreeDate = new Date(startDate.getFullYear(), startDate.getMonth() + months, 1, 12);
-    return { possible: true, months, interest, debtFreeDate };
+    return { possible: true, months, interest, debtFreeDate, payoffDates };
   }
 
   function analyze({ debts, available, recurringAvailable, strategy = "smart", startDate = new Date() }) {

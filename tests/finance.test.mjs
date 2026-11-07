@@ -110,6 +110,21 @@ test("debt payments reduce the balance and the spendable monthly budget", () => 
   assert.equal(run("sum(filterDebtPayments('month'))"), 10000);
 });
 
+test("debts may be mandatory without a due date and fixed costs keep a two-day reminder date", () => {
+  const { run } = preview();
+  run(`els.debtName.value='Անժամկետ պարտք';els.debtBalance.value='80000';els.debtRate.value='0';
+    els.debtMinimum.value='10000';els.debtDueDay.value='';els.debtLateFee.value='0';els.debtReminder.checked=true;
+    els.debtForm.events.submit({preventDefault(){}})`);
+  assert.equal(run("state.debts[0].dueDay"), null);
+  assert.equal(run("state.debts[0].reminder"), false);
+  assert.ok(run("KhnayikDebt.analyze({debts:state.debts,available:20000,recurringAvailable:20000}).selected.payoffDates[state.debts[0].id]"));
+
+  run(`els.fixedName.value='Վարձ';els.fixedAmount.value='50000';els.fixedDueDay.value='6';
+    els.fixedReminder.checked=true;els.fixedForm.events.submit({preventDefault(){}})`);
+  assert.equal(run("state.fixedExpenses[0].dueDay"), 6);
+  assert.equal(run("state.fixedExpenses[0].reminder"), true);
+});
+
 test("saving an old expense preserves its ID and date when edited", () => {
   const { run } = preview();
   run("els.expenseDate.value='2024-05-01';els.expenseTitle.value='Coffee';els.expenseAmount.value='120';els.expenseForm.events.submit({preventDefault(){}})");

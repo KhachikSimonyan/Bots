@@ -100,10 +100,16 @@
           <p class="salary-status" id="salaryStatus" role="status"></p>
         </div>
         <div class="fixed-list" id="fixedList"></div>
-        <form class="mini-form" id="fixedForm">
+        <form class="fixed-form" id="fixedForm">
           <input id="fixedName" aria-label="Ֆիքսված ծախսի անվանում" placeholder="ֆիքսված ծախս" required />
           <input id="fixedAmount" aria-label="Ֆիքսված ծախսի գումար՝ դրամ" inputmode="numeric" placeholder="գումար" required />
-          <button type="submit" aria-label="Ավելացնել ֆիքսված ծախս">+</button>
+          <input id="fixedDueDay" type="number" min="1" max="31" inputmode="numeric" aria-label="Ֆիքսված ծախսի վճարման օրը" placeholder="վճարման օրը" required />
+          <label class="toggle-row fixed-reminder-toggle">
+            <input id="fixedReminder" type="checkbox" checked />
+            <span>Հիշեցնել 2 օր շուտ</span>
+          </label>
+          <button class="primary-button" id="fixedSubmit" type="submit">Ավելացնել</button>
+          <button class="secondary-button" id="cancelFixedEdit" type="button" hidden>Չեղարկել</button>
         </form>
         </div>
       </section>
@@ -254,8 +260,8 @@
             <label>Նվազագույն ամսական վճար
               <input id="debtMinimum" inputmode="numeric" placeholder="գումար՝ դրամ" required />
             </label>
-            <label>Վճարման օրը
-              <input id="debtDueDay" type="number" min="1" max="31" value="1" required />
+            <label>Վճարման օրը (ոչ պարտադիր)
+              <input id="debtDueDay" type="number" min="1" max="31" placeholder="դատարկ՝ առանց վերջնաժամկետի" />
             </label>
             <label>Ուշացման տույժ
               <input id="debtLateFee" inputmode="numeric" value="0" />
@@ -266,7 +272,7 @@
             </label>
             <label class="toggle-row debt-toggle">
               <input id="debtReminder" type="checkbox" checked />
-              <span>Հիշեցնել Telegram-ով մեկ օր շուտ</span>
+              <span>Եթե օր կա՝ հիշեցնել Telegram-ով մեկ օր շուտ</span>
             </label>
             <button class="primary-button" id="debtSubmit" type="submit">Պահպանել պարտքը</button>
             <button class="secondary-button" id="cancelDebtEdit" type="button" hidden>Չեղարկել խմբագրումը</button>

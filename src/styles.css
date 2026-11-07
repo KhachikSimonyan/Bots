@@ -581,9 +581,33 @@ select:focus {
   margin: 12px 0;
 }
 
+.fixed-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.fixed-form > input {
+  width: 100%;
+  padding: 12px 13px;
+}
+
+.fixed-reminder-toggle {
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fixed-form > button {
+  min-height: 44px;
+}
+
 .fixed-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
@@ -591,11 +615,35 @@ select:focus {
   background: #ffffffa8;
 }
 
-.fixed-item button {
-  width: 28px;
-  height: 28px;
+.fixed-item-copy {
+  min-width: 0;
+}
+
+.fixed-item-copy span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fixed-item-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.fixed-item-actions button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 9px;
   border: 0;
   border-radius: 10px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.fixed-item-actions button:last-child {
   background: #f4d7cd;
   color: #a33d27;
 }
@@ -1230,7 +1278,8 @@ select:focus {
   .task-actions { grid-column: 1 / -1; display: flex; justify-content: end; flex-wrap: wrap; }
   .task-info strong, .task-info small { white-space: normal; overflow-wrap: anywhere; }
   .two-col { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .fixed-item { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .fixed-form { grid-template-columns: 1fr; }
+  .fixed-item { grid-template-columns: minmax(0, 1fr) auto; }
   .app-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .debt-metrics, .debt-settings-grid, .debt-form { grid-template-columns: 1fr; }
   .debt-hero { grid-template-columns: 1fr; }

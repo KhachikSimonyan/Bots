@@ -57,6 +57,11 @@ test("night-before lead, completed date, and DST-aware wall times", () => {
   const debtDue = KhnayikReminderTime.next(debt,"debt",ms("2027-02-01T00:00Z"));
   assert.equal(debtDue.key,"debt-d-2027-02-28");
   assert.equal(debtDue.at,ms("2027-02-27T05:00Z"));
+  assert.equal(KhnayikReminderTime.next({...debt,dueDay:null},"debt",tick),null);
+  const fixed = {id:"f",title:"Rent",reminder:true,dueDay:6,time:"09:00",leadMinutes:2880,timeZone:"Asia/Yerevan"};
+  const fixedDue = KhnayikReminderTime.next(fixed,"fixed",tick);
+  assert.equal(fixedDue.key,"fixed-f-2026-11-06");
+  assert.equal(fixedDue.at,tick);
 });
 
 test("delayed and overlapping scans isolate restored accounts, groups and device-only reminders", async t => {
@@ -87,6 +92,22 @@ test("active debt due dates are delivered through Telegram while the app is clos
   await sendDueReminders(env,tick);
   assert.equal(body.chat_id,"100");
   assert.match(body.text,/Պարտքի վճարման օր՝ Քարտ/);
+});
+
+test("fixed expenses are delivered two days before their monthly due date", async t => {
+  const { env, user } = fixture();
+  user("100", { scheduledTasks:[], recurringTasks:[], fixedExpenses:[{
+    id:"rent", title:"Վարձ", amount:100000, reminder:true, dueDay:6,
+    timeZone:"Asia/Yerevan", createdAt:"2026-11-01T00:00:00Z",
+  }] });
+  let body;
+  t.mock.method(globalThis,"fetch",async (_url, options) => {
+    body = JSON.parse(options.body);
+    return Response.json({ok:true});
+  });
+  await sendDueReminders(env,tick);
+  assert.equal(body.chat_id,"100");
+  assert.match(body.text,/Ֆիքսված ծախս՝ Վարձ/);
 });
 
 test("rate limits retain the pending occurrence until Telegram confirms delivery", async t => {

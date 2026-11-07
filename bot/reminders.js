@@ -24,7 +24,8 @@ function scheduleSpecs(state, now) {
     }
   }
   for (const debt of Array.isArray(state.debts) ? state.debts : []) {
-    if (!debt?.id || !debt.reminder || Number(debt.balance) <= 0 || typeof debt.title !== "string") continue;
+    if (!debt?.id || !debt.reminder || !Number.isInteger(debt.dueDay)
+      || Number(debt.balance) <= 0 || typeof debt.title !== "string") continue;
     const spec = {
       type: "debt", id: debt.id, title: `Պարտքի վճարման օր՝ ${debt.title}`,
       reminder: true, dueDay: debt.dueDay, time: "09:00", leadMinutes: 1440,
@@ -32,6 +33,16 @@ function scheduleSpecs(state, now) {
     };
     const occurrence = KhnayikReminderTime.next(spec, "debt", now - CATCH_UP);
     if (occurrence) schedules.push({ key: "debt-" + debt.id, spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });
+  }
+  for (const item of Array.isArray(state.fixedExpenses) ? state.fixedExpenses : []) {
+    if (!item?.id || !item.reminder || !Number.isInteger(item.dueDay) || typeof item.title !== "string") continue;
+    const spec = {
+      type: "fixed", id: item.id, title: `Ֆիքսված ծախս՝ ${item.title}`,
+      reminder: true, dueDay: item.dueDay, time: "09:00", leadMinutes: 2880,
+      timeZone: item.timeZone || "Asia/Yerevan", createdAt: item.createdAt,
+    };
+    const occurrence = KhnayikReminderTime.next(spec, "fixed", now - CATCH_UP);
+    if (occurrence) schedules.push({ key: "fixed-" + item.id, spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });
   }
   return schedules;
 }
