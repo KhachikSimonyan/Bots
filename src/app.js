@@ -746,7 +746,7 @@ function saveCategoryBudgets(event) {
   state.categoryBudgets = next;
   if (saveState() === false) return;
   renderPlan();
-  showMessage("Կատեգորիաների սահմանաչափերը պահպանված են։");
+  showMessage("Կատեգորիաների սահմանաչափերը պահպանված են։", "success");
 }
 
 function addSavingsGoal(event) {
@@ -1539,7 +1539,7 @@ function snoozeTask(task) {
   item.reminderAt = tomorrow.toISOString();
   if (saveState() === false) return;
   renderTasks();
-  showMessage(`«${item.title}» գործը կհիշեցվի վաղը՝ 09:00։`);
+  showMessage(`«${item.title}» գործը կհիշեցվի վաղը՝ 09:00։`, "success");
 }
 
 function renderScheduledFormVisibility() {
@@ -2483,11 +2483,12 @@ function isDuplicate(items, title) {
   return items.some((item) => item.title.trim().toLowerCase() === title.trim().toLowerCase());
 }
 
-function showMessage(message) {
+function showMessage(message, type = "error") {
   window.clearTimeout(messageTimer);
   els.appMessage.textContent = message;
+  els.appMessage.classList.toggle("is-success", type === "success");
   els.appMessage.hidden = false;
-  tg?.HapticFeedback?.notificationOccurred?.("error");
+  tg?.HapticFeedback?.notificationOccurred?.(type === "success" ? "success" : "error");
   messageTimer = window.setTimeout(() => { els.appMessage.hidden = true; }, 5000);
 }
 

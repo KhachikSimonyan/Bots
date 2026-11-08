@@ -1448,6 +1448,7 @@ select:focus {
   font-weight: 700;
   box-shadow: var(--shadow);
 }
+.app-message.is-success { background: #215f49; }
 .task-form, .reminder-box, .task-list, .expense-list, .fixed-list, .month-list {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
