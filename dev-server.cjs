@@ -4,7 +4,7 @@ const path = require("node:path");
 
 const assets = new Set([
   "/index.html", "/src/styles.css", "/src/app.js", "/src/export.js",
-  "/src/sync.js", "/src/reminder-time.js",
+  "/src/sync.js", "/src/reminder-time.js", "/src/debt-plan.js", "/src/finance-tools.js",
 ]);
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript" };
 
@@ -34,6 +34,7 @@ function createPreview() {
       response.writeHead(200, {
         "Content-Type": types[path.extname(pathname)] + "; charset=utf-8",
         "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",
       });
       response.end(request.method === "HEAD" ? undefined : data);
     });

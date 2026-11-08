@@ -3,7 +3,7 @@ globalThis.KhnayikSync = (() => {
   const copy = (value) => JSON.parse(JSON.stringify(value));
   const plain = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
   const safeKey = (k) => !["__proto__", "constructor", "prototype"].includes(k);
-  const keyedLists = new Set(["expenses", "fixedExpenses", "scheduledTasks", "recurringTasks", "debts", "debtPayments"]);
+  const keyedLists = new Set(["expenses", "fixedExpenses", "scheduledTasks", "recurringTasks", "debts", "debtPayments", "incomes", "savingsGoals"]);
 
   function diff(before, after, key = "") {
     if (before === after) return null;

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/styles.css" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261108-1" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -24,6 +24,7 @@
 
       <section class="app-switch" role="tablist" aria-label="Հավելվածի բաժիններ">
         <button class="switch-button is-active" id="budgetTab" data-view="budget" type="button" role="tab" aria-selected="true" aria-controls="budgetView">Բյուջե</button>
+        <button class="switch-button" id="planTab" data-view="plan" type="button" role="tab" aria-selected="false" aria-controls="planView">Պլան</button>
         <button class="switch-button" id="tasksTab" data-view="tasks" type="button" role="tab" aria-selected="false" aria-controls="tasksView">Գործեր</button>
         <button class="switch-button" id="debtsTab" data-view="debts" type="button" role="tab" aria-selected="false" aria-controls="debtsView">Պարտքեր</button>
         <button class="switch-button" id="monthsTab" data-view="months" type="button" role="tab" aria-selected="false" aria-controls="monthsView">Ամիսներ</button>
@@ -166,10 +167,69 @@
           <span class="section-toggle-meta">Փակել</span>
         </button>
         <div class="accordion-panel" id="recentExpensesPanel">
+        <div class="expense-filters">
+          <input id="expenseSearch" type="search" placeholder="Որոնել ծախսը" aria-label="Որոնել ծախսը" />
+          <select id="expenseFilterCategory" aria-label="Զտել ծախսերն ըստ կատեգորիայի">
+            <option value="">Բոլոր կատեգորիաները</option>
+            <option>Սնունդ</option><option>Տրանսպորտ</option><option>Տուն</option>
+            <option>Առողջություն</option><option>Ժամանց</option><option>Այլ</option>
+          </select>
+        </div>
         <button class="text-button inline-action" id="clearBtn" type="button">Մաքրել</button>
         <div class="expense-list" id="expenseList"></div>
         </div>
       </section>
+      </section>
+
+      <section class="app-view" id="planView" role="tabpanel" aria-labelledby="planTab">
+        <section class="plan-hero">
+          <div><span>Լրացուցիչ եկամուտներ</span><strong id="planIncomeTotal">֏0</strong></div>
+          <div class="plan-hero-right"><span>Պլանավորված խնայողություն</span><strong id="planSavingsTotal">֏0</strong></div>
+        </section>
+
+        <section class="card plan-card">
+          <div class="section-head"><div><h2>Եկամուտներ</h2><p>Հավելավճար, կողմնակի եկամուտ, վերադարձ կամ այլ մուտք</p></div></div>
+          <form id="incomeForm" class="plan-form">
+            <label>Անվանում<input id="incomeTitle" maxlength="80" placeholder="օր. հավելավճար" required /></label>
+            <label>Գումար<input id="incomeAmount" inputmode="numeric" placeholder="գումար՝ դրամ" required /></label>
+            <label>Տեսակ<select id="incomeKind"><option value="one-time">Մեկանգամյա</option><option value="monthly">Ամենամսյա</option></select></label>
+            <label id="incomeDateField">Մուտքի ամսաթիվ<input id="incomeDate" type="date" required /></label>
+            <label id="incomeDayField" hidden>Ամսվա օրը<input id="incomeDay" type="number" min="1" max="31" value="1" /></label>
+            <button class="primary-button" type="submit">Ավելացնել եկամուտը</button>
+          </form>
+          <div id="incomeList" class="plan-list"></div>
+        </section>
+
+        <section class="card plan-card">
+          <div class="section-head"><div><h2>Կատեգորիաների սահմանաչափեր</h2><p>Խնայիկը կզգուշացնի 80% և 100% սահմանների ժամանակ</p></div></div>
+          <form id="categoryBudgetForm">
+            <div id="categoryBudgetList" class="category-budget-grid"></div>
+            <button class="secondary-button" type="submit">Պահել սահմանաչափերը</button>
+          </form>
+        </section>
+
+        <section class="card plan-card">
+          <div class="section-head"><div><h2>Խնայողության նպատակներ</h2><p>Նշեք նպատակը, կուտակված գումարը և ամսական ներդրումը</p></div></div>
+          <form id="savingsForm" class="plan-form">
+            <label>Նպատակ<input id="savingsTitle" maxlength="80" placeholder="օր. արտակարգ պահուստ" required /></label>
+            <label>Թիրախային գումար<input id="savingsTarget" inputmode="numeric" required /></label>
+            <label>Արդեն կուտակված<input id="savingsSaved" inputmode="numeric" value="0" /></label>
+            <label>Ամսական ներդրում<input id="savingsMonthly" inputmode="numeric" value="0" /></label>
+            <label>Ցանկալի ամսաթիվ<input id="savingsDueDate" type="date" /></label>
+            <button class="primary-button" type="submit">Ավելացնել նպատակը</button>
+          </form>
+          <div id="savingsList" class="plan-list"></div>
+        </section>
+
+        <section class="card plan-card">
+          <div class="section-head"><div><h2>Խելացի վերլուծություն</h2><p>Ամիսների համեմատություն և սահմանաչափերի ազդանշաններ</p></div></div>
+          <div id="insightsList" class="insight-list"></div>
+        </section>
+
+        <section class="card plan-card">
+          <div class="section-head"><div><h2>Ֆինանսական օրացույց</h2><p>Առաջիկա 35 օրվա մուտքեր, վճարումներ և կանխատեսվող մնացորդ</p></div></div>
+          <div id="cashflowList" class="cashflow-list"></div>
+        </section>
       </section>
 
       <section class="app-view" id="monthsView" role="tabpanel" aria-labelledby="monthsTab">
@@ -242,6 +302,13 @@
           </div>
           <button class="secondary-button" id="saveDebtSettings" type="button">Պահել կարգավորումները</button>
           <p class="backup-note" id="debtReserveNote">0-ի դեպքում Խնայիկը պահուստը կհաշվի ծախսերի պատմությունից։</p>
+          <div class="what-if-box">
+            <label>Եթե ամեն ամիս հավելյալ վճարեմ
+              <input id="debtExtraPayment" inputmode="numeric" value="0" />
+            </label>
+            <button class="secondary-button" id="calculateDebtWhatIf" type="button">Հաշվել տարբերությունը</button>
+            <p id="debtWhatIfResult" class="backup-note" role="status"></p>
+          </div>
         </section>
 
         <section class="card debt-form-card">
@@ -339,6 +406,29 @@
             <button class="secondary-button" id="csvExportBtn" type="button">Արտահանել ծախսերը CSV-ով</button>
           </div>
           <p class="backup-note" id="excelNote">Ֆայլը բացվում է Excel-ում և ունի առանձին աղյուսակներ։</p>
+        </section>
+
+        <section class="card backup-card">
+          <div class="section-head"><div><h2>Բանկային քաղվածք</h2><p>Ներմուծեք CSV կամ TSV ֆայլը․ կրկնվող գործարքները չեն ավելացվի</p></div></div>
+          <label class="restore-control">
+            <input id="bankImportInput" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" />
+            <span>Ընտրել բանկային քաղվածքը</span>
+          </label>
+          <div id="importPreview" class="import-preview"></div>
+          <button class="primary-button" id="confirmImportBtn" type="button" hidden>Գրանցել ընտրված գործարքները</button>
+          <p class="backup-note" id="importNote">Ակնկալվող սյունակներ՝ ամսաթիվ, նկարագրություն և գումար կամ մուտք/ելք։</p>
+        </section>
+
+        <section class="card backup-card">
+          <div class="section-head"><div><h2>Պահուստավորում</h2><p>Պահեք կամ ամբողջությամբ վերականգնեք Խնայիկի տվյալները</p></div></div>
+          <div class="backup-grid">
+            <button class="primary-button" id="backupExportBtn" type="button">Ներբեռնել ամբողջ պահուստը</button>
+            <label class="restore-control">
+              <input id="backupImportInput" type="file" accept="application/json,.json" />
+              <span>Վերականգնել պահուստից</span>
+            </label>
+          </div>
+          <p class="backup-note" id="backupNote">Վերականգնումից առաջ ներկայիս տվյալները փոխարինելու հաստատում կպահանջվի։</p>
         </section>
       </section>
 
@@ -503,11 +593,12 @@
 <script>
   window.KHNAYIK_API_BASE = "https://bot.simonyankhachik9.workers.dev";
 </script>
-<script src="./src/export.js"></script>
-<script src="./src/reminder-time.js"></script>
-<script src="./src/debt-plan.js"></script>
-<script src="./src/sync.js"></script>
-<script src="./src/app.js"></script>
+<script src="./src/export.js?v=20261108-1"></script>
+<script src="./src/reminder-time.js?v=20261108-1"></script>
+<script src="./src/debt-plan.js?v=20261108-1"></script>
+<script src="./src/finance-tools.js?v=20261108-1"></script>
+<script src="./src/sync.js?v=20261108-1"></script>
+<script src="./src/app.js?v=20261108-1"></script>
 
   </body>
 </html>

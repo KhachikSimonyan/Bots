@@ -2,6 +2,7 @@ export const emptyState = () => ({
   salary: 0, salaryMode: "fixed", salaryDay: 1,
   fixedExpenses: [], expenses: [], recurringTasks: [], scheduledTasks: [],
   debts: [], debtPayments: [], debtSettings: { strategy: "smart", safetyReserve: 0 },
+  incomes: [], savingsGoals: [], categoryBudgets: {},
   monthlyBudgets: {}, notified: {}, appearance: {},
 });
 
@@ -31,6 +32,13 @@ const debt = (item) => amount(item.balance) && amount(item.originalBalance) && i
   && ["card", "loan", "personal", "tax", "other"].includes(item.type)
   && typeof item.pastDue === "boolean" && typeof item.reminder === "boolean"
   && (!item.createdAt || timestamp(item.createdAt)) && (!item.closedAt || timestamp(item.closedAt));
+const income = (item) => amount(item.amount) && ["one-time", "monthly"].includes(item.kind)
+  && (item.kind !== "one-time" || day(item.date))
+  && (item.kind !== "monthly" || (Number.isInteger(item.day) && item.day >= 1 && item.day <= 31))
+  && (!item.startMonth || month(item.startMonth)) && (!item.createdAt || timestamp(item.createdAt));
+const goal = (item) => amount(item.target) && item.target > 0 && amount(item.saved) && item.saved <= item.target
+  && amount(item.monthlyContribution) && (!item.dueDate || day(item.dueDate)) && (!item.startMonth || month(item.startMonth))
+  && (!item.createdAt || timestamp(item.createdAt));
 
 function list(value, check) {
   if (!Array.isArray(value)) return false;
@@ -53,6 +61,10 @@ export function validState(state) {
       && Array.isArray(item.doneDates) && item.doneDates.every(day))
     || !list(state.debts, debt)
     || !list(state.debtPayments, (item) => text(item.debtId) && fixed(item) && timestamp(item.createdAt))) return false;
+  if ((state.incomes != null && !list(state.incomes, income))
+    || (state.savingsGoals != null && !list(state.savingsGoals, goal))
+    || (state.categoryBudgets != null && (!object(state.categoryBudgets)
+      || !Object.values(state.categoryBudgets).every(amount)))) return false;
   if (!object(state.monthlyBudgets) || !object(state.appearance) || !object(state.notified)
     || !object(state.debtSettings) || !["smart", "avalanche", "snowball"].includes(state.debtSettings.strategy)
     || !amount(state.debtSettings.safetyReserve)) return false;

@@ -6,7 +6,7 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const html = readFileSync(new URL("index.html", root), "utf8");
 const scripts = [...html.matchAll(/<script src="(\.\/src\/[^"]+)"/g)].map((match) =>
-  readFileSync(new URL(match[1], root), "utf8"));
+  readFileSync(new URL(match[1].split("?")[0], root), "utf8"));
 
 class Element {
   value = "";
@@ -107,6 +107,17 @@ test("remaining days and daily limit run until the next salary date", () => {
   run("state.salary = 30000; state.salaryDay = new Date().getDate() === 1 ? 2 : 1; state.monthlyBudgets = {}; updateCurrentMonthBudget(true); renderBudget()");
   assert.equal(run("els.daysLeft.textContent"), String(run("getDaysUntilNextSalary()")));
   assert.equal(run("els.dailyLimit.textContent"), run("formatMoney(Math.floor(30000 / getDaysUntilNextSalary()))"));
+});
+
+test("additional income and active savings goals change the spendable budget", () => {
+  const { run } = preview();
+  run(`state.salary=100000;state.salaryDay=1;state.fixedExpenses=[];state.monthlyBudgets={};updateCurrentMonthBudget(true);
+    state.incomes=[{id:'i',title:'Ֆրիլանս',amount:20000,kind:'monthly',day:5,startMonth:getMonthKey(new Date()),createdAt:new Date().toISOString()}];
+    state.savingsGoals=[{id:'g',title:'Պահուստ',target:500000,saved:100000,monthlyContribution:30000,startMonth:getMonthKey(new Date()),createdAt:new Date().toISOString()}];
+    renderBudget()`);
+  assert.equal(run("els.freeMoney.textContent"), run("formatMoney(90000)"));
+  run("state.savingsGoals[0].saved=500000;renderBudget()");
+  assert.equal(run("els.freeMoney.textContent"), run("formatMoney(120000)"));
 });
 
 test("debt payments reduce the balance and the spendable monthly budget", () => {
