@@ -31,14 +31,20 @@ let durableView = KhnayikSync.copy(state);
 let syncDescription = "";
 let messageTimer = 0;
 let pendingImports = [];
+let homeScreenStatus = "unknown";
 
 const accordionState = {
-  fixed: true,
+  fixed: false,
   addExpense: true,
-  recentExpenses: true,
+  recentExpenses: false,
   months: true,
-  recurringTasks: true,
+  recurringTasks: false,
   taskList: true,
+  planIncome: false,
+  categoryBudgets: false,
+  savingsGoals: false,
+  debtStrategySettings: false,
+  debtForm: false,
 };
 
 const els = {
@@ -95,6 +101,9 @@ const els = {
   expenseSearch: document.getElementById("expenseSearch"),
   expenseFilterCategory: document.getElementById("expenseFilterCategory"),
   menuBtn: document.getElementById("menuBtn"),
+  appSwitch: document.querySelector(".app-switch"),
+  addHomeScreenBtn: document.getElementById("addHomeScreenBtn"),
+  homeScreenNote: document.getElementById("homeScreenNote"),
   expenseTemplate: document.getElementById("expenseTemplate"),
   todayTaskCount: document.getElementById("todayTaskCount"),
   allowNotificationsBtn: document.getElementById("allowNotificationsBtn"),
@@ -248,7 +257,10 @@ setInterval(checkReminders, 30000);
 checkReminders();
 
 function initTelegram() {
-  if (!tg) return;
+  if (!tg) {
+    homeScreenStatus = "unsupported";
+    return;
+  }
   tg.ready?.();
   tg.expand?.();
   if (tg.isVersionAtLeast?.("6.1")) {
@@ -258,6 +270,20 @@ function initTelegram() {
 
   const name = tg.initDataUnsafe?.user?.first_name;
   if (name) els.greeting.textContent = `Բարի օր, ${name}`;
+
+  tg.onEvent?.("homeScreenAdded", () => {
+    homeScreenStatus = "added";
+    renderHomeScreenInstall();
+    showMessage("Խնայիկը ավելացվեց հեռախոսի գլխավոր էկրանին։", "success");
+  });
+  if (tg.isVersionAtLeast?.("8.0") && typeof tg.checkHomeScreenStatus === "function") {
+    tg.checkHomeScreenStatus((status) => {
+      homeScreenStatus = ["unsupported", "unknown", "added", "missed"].includes(status) ? status : "unknown";
+      renderHomeScreenInstall();
+    });
+  } else {
+    homeScreenStatus = "unsupported";
+  }
 }
 
 function initTimePickers() {
@@ -413,6 +439,7 @@ function bindEvents() {
     activeView = activeView === "settings" ? "budget" : "settings";
     render();
   });
+  els.addHomeScreenBtn.addEventListener("click", requestHomeScreenInstall);
   els.excelExportBtn.addEventListener("click", exportExcel);
   els.csvExportBtn.addEventListener("click", exportCsv);
   els.backgroundInput.addEventListener("change", setBackgroundImage);
@@ -605,6 +632,7 @@ function render() {
   renderScheduledFormVisibility();
   renderAccordions();
   renderSyncStatus();
+  renderHomeScreenInstall();
   renderIncomeFields();
   applyBackgroundImage();
 }
@@ -667,6 +695,7 @@ function renderView() {
   els.debtsView.classList.toggle("is-active", activeView === "debts");
   els.monthsView.classList.toggle("is-active", activeView === "months");
   els.settingsView.classList.toggle("is-active", activeView === "settings");
+  els.appSwitch.hidden = activeView === "settings";
   els.menuBtn.classList.toggle("is-active", activeView === "settings");
   els.menuBtn.textContent = activeView === "settings" ? "Վերադառնալ" : "Կարգավորումներ";
   els.menuBtn.setAttribute("aria-label", activeView === "settings" ? "Վերադառնալ բյուջե" : "Բացել կարգավորումները");
@@ -697,7 +726,7 @@ function renderBudget() {
   const dailyLimit = Math.max(0, Math.floor(free / daysLeft));
 
   els.freeMoney.textContent = formatMoney(free);
-  els.budgetHint.textContent = `Եկամուտ՝ ${formatMoney(totalIncome)} · Ֆիքսված՝ ${formatMoney(fixedTotal)} · Խնայողություն՝ ${formatMoney(savingsReserve)} · Ծախսեր և պարտքեր՝ ${formatMoney(monthSpent)}`;
+  els.budgetHint.textContent = `Պարտադիր պահումներ՝ ${formatMoney(fixedTotal + savingsReserve)} · Այս ամիս ելք՝ ${formatMoney(monthSpent)}`;
   const noBudget = base <= 0 && free < 0;
   els.budgetPercent.textContent = noBudget ? "Պակասուրդ" : `${usage}%`;
   els.budgetMeter.style.strokeDashoffset = String(327 * (1 - (noBudget ? 1 : Math.min(usage, 100) / 100)));
@@ -1177,7 +1206,9 @@ function editDebt(id) {
   const advanced = els.debtRate.closest?.("details");
   if (advanced) advanced.open = true;
   activeView = "debts";
+  accordionState.debtForm = true;
   renderView();
+  renderAccordions();
   els.debtName.focus();
 }
 
@@ -1564,9 +1595,40 @@ function renderAccordions() {
 
 function renderSyncStatus(text) {
   if (text) syncDescription = text;
-  els.syncStatus.textContent = CLOUD_MODE
+  const description = CLOUD_MODE
     ? syncDescription || "Բեռնվում են հաշվի տվյալները"
     : "Նախադիտում․ պահվում է միայն այս սարքում";
+  const needsAttention = CLOUD_MODE && !/համաժամացված|պահվում են սերվերում/i.test(description);
+  els.syncStatus.textContent = description;
+  els.syncStatus.hidden = !needsAttention;
+}
+
+function renderHomeScreenInstall() {
+  if (!els.addHomeScreenBtn || !els.homeScreenNote) return;
+  const supported = Boolean(tg?.isVersionAtLeast?.("8.0") && typeof tg.addToHomeScreen === "function");
+  const added = homeScreenStatus === "added";
+  els.addHomeScreenBtn.disabled = added;
+  els.addHomeScreenBtn.classList.toggle("is-complete", added);
+  els.addHomeScreenBtn.textContent = added ? "Ավելացված է գլխավոր էկրանին" : "Ավելացնել գլխավոր էկրանին";
+  els.homeScreenNote.textContent = added
+    ? "Խնայիկի նշանն արդեն կա հեռախոսի գլխավոր էկրանին։"
+    : supported
+      ? "Telegram-ը կբացի հեռախոսի հաստատման պատուհանը։"
+      : "Բացեք Խնայիկը Telegram-ի թարմացված բջջային հավելվածում՝ այս կոճակն օգտագործելու համար։";
+}
+
+function requestHomeScreenInstall() {
+  const supported = Boolean(tg?.isVersionAtLeast?.("8.0") && typeof tg.addToHomeScreen === "function");
+  if (!supported) {
+    showMessage("Այս գործողությունը հասանելի է Telegram-ի թարմացված բջջային հավելվածում։");
+    return;
+  }
+  if (homeScreenStatus === "added") {
+    showMessage("Խնայիկն արդեն ավելացված է գլխավոր էկրանին։", "success");
+    return;
+  }
+  tg.HapticFeedback?.impactOccurred?.("light");
+  tg.addToHomeScreen();
 }
 
 function scheduleCloudSync(delay = 200) {

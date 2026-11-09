@@ -102,11 +102,7 @@ select {
 }
 
 .eyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  display: none;
 }
 
 h1,
@@ -126,6 +122,11 @@ h1 {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.sync-status:not([hidden]) {
+  max-width: 310px;
+  color: #9b3f2d;
 }
 
 h2 {
@@ -838,6 +839,16 @@ select:focus {
   box-shadow: 0 12px 24px rgba(216, 97, 69, 0.22);
 }
 
+.primary-button:disabled {
+  cursor: default;
+  opacity: 1;
+  box-shadow: none;
+}
+
+.primary-button.is-complete {
+  background: var(--green);
+}
+
 .text-button {
   align-self: start;
   padding: 8px 10px;
@@ -1334,6 +1345,21 @@ select:focus {
   gap: 14px;
 }
 
+.install-card {
+  display: grid;
+  gap: 12px;
+  border-color: rgba(50, 122, 95, 0.28);
+  background: linear-gradient(135deg, rgba(255, 250, 240, 0.94), rgba(143, 201, 167, 0.24));
+}
+
+.install-card .section-head {
+  margin-bottom: 0;
+}
+
+.install-card .primary-button {
+  width: 100%;
+}
+
 .backup-grid {
   display: grid;
   gap: 10px;
@@ -1466,7 +1492,12 @@ select:focus {
   .two-col { display: grid; grid-template-columns: minmax(0, 1fr); }
   .fixed-form { grid-template-columns: 1fr; }
   .fixed-item { grid-template-columns: minmax(0, 1fr) auto; }
-  .app-switch { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-switch {
+    grid-template-columns: repeat(5, minmax(62px, 1fr));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .app-switch::-webkit-scrollbar { display: none; }
   .plan-form, .plan-hero { grid-template-columns: 1fr; }
   .plan-hero-right { text-align: left; }
   .expense-filters { grid-template-columns: 1fr; }

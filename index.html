@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/styles.css?v=20261108-1" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261109-1" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -17,7 +17,7 @@
         <div>
           <p class="eyebrow" id="appEyebrow">Իմ բյուջեն</p>
           <h1 id="greeting">Բարի օր</h1>
-          <small class="sync-status" id="syncStatus" role="status">Պահվում է սարքի մեջ</small>
+          <small class="sync-status" id="syncStatus" role="status" hidden></small>
         </div>
         <button class="icon-button settings-button" id="menuBtn" type="button" aria-label="Բացել կարգավորումները" title="Կարգավորումներ">Կարգավորումներ</button>
       </section>
@@ -187,8 +187,12 @@
           <div class="plan-hero-right"><span>Պլանավորված խնայողություն</span><strong id="planSavingsTotal">֏0</strong></div>
         </section>
 
-        <section class="card plan-card">
-          <div class="section-head"><div><h2>Եկամուտներ</h2><p>Հավելավճար, կողմնակի եկամուտ, վերադարձ կամ այլ մուտք</p></div></div>
+        <section class="card plan-card accordion-card">
+          <button class="section-toggle" data-accordion="planIncome" type="button" aria-expanded="false">
+            <span class="section-toggle-copy"><strong>Եկամուտներ</strong><small>Հավելավճար կամ այլ մուտք</small></span>
+            <span class="section-toggle-meta">Բացել</span>
+          </button>
+          <div class="accordion-panel is-hidden" id="planIncomePanel">
           <form id="incomeForm" class="plan-form">
             <label>Անվանում<input id="incomeTitle" maxlength="80" placeholder="օր. հավելավճար" required /></label>
             <label>Գումար<input id="incomeAmount" inputmode="numeric" placeholder="գումար՝ դրամ" required /></label>
@@ -198,18 +202,28 @@
             <button class="primary-button" type="submit">Ավելացնել եկամուտը</button>
           </form>
           <div id="incomeList" class="plan-list"></div>
+          </div>
         </section>
 
-        <section class="card plan-card">
-          <div class="section-head"><div><h2>Կատեգորիաների սահմանաչափեր</h2><p>Խնայիկը կզգուշացնի 80% և 100% սահմանների ժամանակ</p></div></div>
+        <section class="card plan-card accordion-card">
+          <button class="section-toggle" data-accordion="categoryBudgets" type="button" aria-expanded="false">
+            <span class="section-toggle-copy"><strong>Ծախսերի սահմանաչափեր</strong><small>Զգուշացում՝ 80% և 100%-ի ժամանակ</small></span>
+            <span class="section-toggle-meta">Բացել</span>
+          </button>
+          <div class="accordion-panel is-hidden" id="categoryBudgetsPanel">
           <form id="categoryBudgetForm">
             <div id="categoryBudgetList" class="category-budget-grid"></div>
             <button class="secondary-button" type="submit">Պահել սահմանաչափերը</button>
           </form>
+          </div>
         </section>
 
-        <section class="card plan-card">
-          <div class="section-head"><div><h2>Խնայողության նպատակներ</h2><p>Նշեք նպատակը, կուտակված գումարը և ամսական ներդրումը</p></div></div>
+        <section class="card plan-card accordion-card">
+          <button class="section-toggle" data-accordion="savingsGoals" type="button" aria-expanded="false">
+            <span class="section-toggle-copy"><strong>Խնայողության նպատակներ</strong><small>Թիրախ և ամսական ներդրում</small></span>
+            <span class="section-toggle-meta">Բացել</span>
+          </button>
+          <div class="accordion-panel is-hidden" id="savingsGoalsPanel">
           <form id="savingsForm" class="plan-form">
             <label>Նպատակ<input id="savingsTitle" maxlength="80" placeholder="օր. արտակարգ պահուստ" required /></label>
             <label>Թիրախային գումար<input id="savingsTarget" inputmode="numeric" required /></label>
@@ -219,6 +233,7 @@
             <button class="primary-button" type="submit">Ավելացնել նպատակը</button>
           </form>
           <div id="savingsList" class="plan-list"></div>
+          </div>
         </section>
 
         <section class="card plan-card">
@@ -281,13 +296,12 @@
           <div class="debt-payment-plan" id="debtPaymentPlan"></div>
         </section>
 
-        <section class="card debt-settings-card">
-          <div class="section-head">
-            <div>
-              <h2>Ռազմավարություն</h2>
-              <p>Խնայիկը կպահպանի նվազագույն վճարները և ազատ գումարը կուղղի մեկ նպատակային պարտքի։</p>
-            </div>
-          </div>
+        <section class="card debt-settings-card accordion-card">
+          <button class="section-toggle" data-accordion="debtStrategySettings" type="button" aria-expanded="false">
+            <span class="section-toggle-copy"><strong>Մարման ռազմավարություն</strong><small>Եղանակ, պահուստ և հավելյալ վճար</small></span>
+            <span class="section-toggle-meta">Բացել</span>
+          </button>
+          <div class="accordion-panel is-hidden" id="debtStrategySettingsPanel">
           <div class="debt-settings-grid">
             <label>Մարման եղանակ
               <select id="debtStrategy">
@@ -309,15 +323,15 @@
             <button class="secondary-button" id="calculateDebtWhatIf" type="button">Հաշվել տարբերությունը</button>
             <p id="debtWhatIfResult" class="backup-note" role="status"></p>
           </div>
+          </div>
         </section>
 
-        <section class="card debt-form-card">
-          <div class="section-head">
-            <div>
-              <h2 id="debtFormTitle">Ավելացնել պարտք</h2>
-              <p>Գրեք պայմանագրի իրական թվերը՝ ճշգրիտ պլան ստանալու համար։</p>
-            </div>
-          </div>
+        <section class="card debt-form-card accordion-card">
+          <button class="section-toggle" data-accordion="debtForm" type="button" aria-expanded="false">
+            <span class="section-toggle-copy"><strong id="debtFormTitle">Ավելացնել պարտք</strong><small>Մնացորդ և նվազագույն վճար</small></span>
+            <span class="section-toggle-meta">Բացել</span>
+          </button>
+          <div class="accordion-panel is-hidden" id="debtFormPanel">
           <form id="debtForm" class="debt-form">
             <label>Անվանում
               <input id="debtName" maxlength="80" placeholder="օր. վարկային քարտ" required />
@@ -362,6 +376,7 @@
             <button class="primary-button" id="debtSubmit" type="submit">Պահպանել պարտքը</button>
             <button class="secondary-button" id="cancelDebtEdit" type="button" hidden>Չեղարկել խմբագրումը</button>
           </form>
+          </div>
         </section>
 
         <section class="card debt-list-card">
@@ -376,6 +391,17 @@
       </section>
 
       <section class="app-view" id="settingsView" aria-label="Կարգավորումներ">
+        <section class="card install-card">
+          <div class="section-head">
+            <div>
+              <h2>Խնայիկը հեռախոսում</h2>
+              <p>Բացեք մեկ հպումով՝ առանց Telegram-ում փնտրելու</p>
+            </div>
+          </div>
+          <button class="primary-button" id="addHomeScreenBtn" type="button">Ավելացնել գլխավոր էկրանին</button>
+          <p class="backup-note" id="homeScreenNote" role="status">Կստեղծվի Խնայիկի նշանը հեռախոսի գլխավոր էկրանին։</p>
+        </section>
+
         <section class="card backup-card">
           <div class="section-head">
             <div>
@@ -598,7 +624,7 @@
 <script src="./src/debt-plan.js?v=20261108-1"></script>
 <script src="./src/finance-tools.js?v=20261108-1"></script>
 <script src="./src/sync.js?v=20261108-1"></script>
-<script src="./src/app.js?v=20261108-1"></script>
+<script src="./src/app.js?v=20261109-1"></script>
 
   </body>
 </html>
