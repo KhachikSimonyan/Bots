@@ -57,13 +57,20 @@ test("auth, account isolation, voice transcription, atomic revision and durable 
   const env = {
     DB: database(), " BOT_TOKEN": botToken, CORS_ORIGIN: origin,
     AI: { run: async (model, input) => {
-      assert.equal(model, "@cf/openai/whisper-large-v3-turbo");
-      assert.equal(input.language, "hy");
-      assert.equal(input.task, "transcribe");
-      assert.equal(input.beam_size, 8);
-      assert.match(input.initial_prompt, /Հայերեն ծախսի/);
-      assert.ok(input.audio.length > 0);
-      return { text: "Գրանցիր 4000 դրամ բենզին" };
+      if (model === "@cf/openai/whisper-large-v3-turbo") {
+        assert.equal(input.language, "hy");
+        assert.equal(input.task, "transcribe");
+        assert.equal(input.beam_size, 8);
+        assert.match(input.initial_prompt, /Հայերեն (ծախսի|մեկանգամյա)/);
+        assert.ok(input.audio.length > 0);
+        return { text: input.initial_prompt.includes("մեկանգամյա")
+          ? "Պլանավորիր հանդիպում Արամի հետ վաղը ժամը չորսին նախագծի մասին խոսելու"
+          : "Գրանցիր 4000 դրամ բենզին" };
+      }
+      assert.equal(model, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+      assert.equal(input.response_format.type, "json_schema");
+      assert.match(input.messages[0].content, /Այսօր 2026-11-09 է/);
+      return { response: { title:"Հանդիպում Արամի հետ", date:"2026-11-10", time:"16:00", hasDate:true, hasTime:true } };
     } },
   };
   const send = (path, options) => worker.fetch(new Request(base + path, options), env);
@@ -85,6 +92,12 @@ test("auth, account isolation, voice transcription, atomic revision and durable 
   const voice = await send("/api/transcribe", {method:"POST",headers:{...headers,"Content-Type":"audio/webm"},body:new Uint8Array([1,2,3])});
   assert.equal(voice.status,200);
   assert.equal((await voice.json()).text,"Գրանցիր 4000 դրամ բենզին");
+  const taskVoice = await send("/api/transcribe", {method:"POST",headers:{
+    ...headers,"Content-Type":"audio/webm","X-Khnayik-Voice-Kind":"task","X-Khnayik-Local-Date":"2026-11-09",
+  },body:new Uint8Array([1,2,3])});
+  assert.equal(taskVoice.status,200);
+  assert.deepEqual((await taskVoice.json()).task,
+    {title:"Հանդիպում Արամի հետ",date:"2026-11-10",time:"16:00",hasDate:true,hasTime:true});
   assert.equal((await send("/api/transcribe", {method:"POST",headers,body:"not audio"})).status,415);
   assert.equal((await put(20,null,"missing")).status,428);
   const attempts = await Promise.all([put(100,"0","one"),put(200,"0","two")]);

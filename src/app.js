@@ -587,7 +587,7 @@ async function finishServerRecording(recording) {
   button.setAttribute("aria-pressed", "false");
   button.disabled = true;
   button.textContent = "Ճանաչվում է…";
-  status.textContent = "Ձայնը վերծանվում է հայերեն…";
+  status.textContent = kind === "task" ? "Ձայնը, օրը և ժամը վերլուծվում են…" : "Ձայնը վերծանվում է հայերեն…";
   try {
     const audio = new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || "audio/webm" });
     if (audio.size < 200) throw new Error("Խոսք չլսվեց։ Կրկին փորձեք ավելի բարձր խոսել։");
@@ -597,10 +597,12 @@ async function finishServerRecording(recording) {
       headers: {
         "Content-Type": audio.type || "audio/webm",
         "X-Khnayik-Voice-Kind": kind,
+        "X-Khnayik-Local-Date": getDateKey(new Date()),
+        "X-Khnayik-Time-Zone": Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Yerevan",
       },
     });
     status.textContent = `Լսեցի՝ «${result.text}»`;
-    applyVoiceTranscript(kind, result.text);
+    applyVoiceTranscript(kind, result.text, result.task);
   } catch (error) {
     voiceProblem(status, error.message || "Ձայնը չհաջողվեց ճանաչել։ Կրկին փորձեք։");
   } finally {
@@ -672,7 +674,7 @@ function startVoiceRecognition(kind, SpeechRecognition) {
   }
 }
 
-function applyVoiceTranscript(kind, transcript) {
+function applyVoiceTranscript(kind, transcript, taskDetails = null) {
   if (kind === "expense") {
     const parsed = KhnayikVoice.parseExpense(transcript);
     if (parsed.error === "amount") return voiceProblem(els.expenseVoiceStatus, "Գումարը չհասկացա։ Ասեք, օրինակ՝ «4,000 դրամ բենզին»։");
@@ -689,12 +691,16 @@ function applyVoiceTranscript(kind, transcript) {
 
   const parsed = KhnayikVoice.parseTask(transcript, new Date());
   if (parsed.error) return voiceProblem(els.taskVoiceStatus, "Գործի անվանումը չհասկացա։ Կրկին փորձեք։");
+  const aiTitle = String(taskDetails?.title || "").trim().slice(0, 60);
+  const title = aiTitle || parsed.title;
+  const date = taskDetails?.hasDate ? taskDetails.date : parsed.date;
+  const time = taskDetails?.hasTime ? taskDetails.time : parsed.time;
   isScheduledFormOpen = true;
   renderScheduledFormVisibility();
-  els.scheduledTitle.value = parsed.title;
-  els.scheduledDate.value = parsed.date;
-  setSelectedTime("scheduledTime", parsed.time);
-  els.taskVoiceStatus.textContent = `Լրացված է՝ ${parsed.title}։ Ստուգեք օրը, ժամը և պահպանեք։`;
+  els.scheduledTitle.value = title;
+  els.scheduledDate.value = date;
+  setSelectedTime("scheduledTime", time);
+  els.taskVoiceStatus.textContent = `Լրացված է՝ ${title} · ${formatTaskDate(date)} · ${time}։ Ստուգեք և պահպանեք։`;
   els.scheduledTaskForm.scrollIntoView?.({ behavior: "smooth", block: "center" });
   els.scheduledTitle.focus();
   tg?.HapticFeedback?.notificationOccurred?.("success");

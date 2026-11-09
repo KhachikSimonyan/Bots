@@ -101,7 +101,15 @@ async function handleApi(request, env, url) {
     });
     const text = String(result?.text || "").trim();
     if (!text) return json({ error: "Խոսք չհայտնաբերվեց։ Կրկին փորձեք ավելի բարձր խոսել։" }, 422);
-    return json({ text: text.slice(0, 500) });
+    let task = null;
+    if (kind === "task") {
+      const requestedDate = request.headers.get("X-Khnayik-Local-Date") || "";
+      const localDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : localDateKey(env);
+      const timeZone = String(request.headers.get("X-Khnayik-Time-Zone") || "Asia/Yerevan").replace(/[^A-Za-z_+\/-]/g, "").slice(0, 50);
+      try { task = await extractTaskDetails(env, text, localDate, timeZone); }
+      catch (error) { console.warn("Task extraction fallback", error?.name || "Error"); }
+    }
+    return json({ text: text.slice(0, 500), task });
   }
   const restore = url.pathname === "/api/restore" && request.method === "POST";
   if (restore || (url.pathname === "/api/state" && request.method === "PUT")) {
@@ -132,6 +140,52 @@ async function handleApi(request, env, url) {
   }
 
   return json({ error: "Not found" }, 404);
+}
+
+async function extractTaskDetails(env, transcript, localDate, timeZone) {
+  const response = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [
+      {
+        role: "system",
+        content: `Դու հայերեն ձայնային հրամաններից հանդիպում կամ գործ ես առանձնացնում։ Այսօր ${localDate} է, ժամային գոտին՝ ${timeZone}։ Վերնագիրը դարձրու կարճ, հստակ և առավելագույնը 60 նիշ՝ առանց «պլանավորիր», «ավելացրու», ամսաթվի, ժամի ու երկար բացատրության։ Եթե խոսքում օր կամ ժամ չկա, համապատասխան hasDate/hasTime-ը դարձրու false և արժեքը թող դատարկ։ Հարաբերական օրերը վերածիր YYYY-MM-DD-ի։ «Ժամը չորսին» հանդիպման համար սովորաբար 16:00 է, իսկ առավոտյան/երեկոյան նշումները պարտադիր հաշվի առ։ Մի հորինիր չասված օր կամ ժամ։`,
+      },
+      { role: "user", content: String(transcript).slice(0, 500) },
+    ],
+    max_tokens: 180,
+    temperature: 0,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: {
+          title: { type: "string", maxLength: 60 },
+          date: { type: "string" },
+          time: { type: "string" },
+          hasDate: { type: "boolean" },
+          hasTime: { type: "boolean" },
+        },
+        required: ["title", "date", "time", "hasDate", "hasTime"],
+        additionalProperties: false,
+      },
+    },
+  });
+  const value = response?.response;
+  const title = String(value?.title || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const hasDate = value?.hasDate === true && validDay(value.date) && value.date >= localDate;
+  const hasTime = value?.hasTime === true && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.time);
+  if (!title) return null;
+  return { title, date: hasDate ? value.date : "", time: hasTime ? value.time : "", hasDate, hasTime };
+}
+
+function validDay(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(value + "T00:00:00Z"))
+    && new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
+}
+
+function localDateKey(env) {
+  const offset = Math.max(-720, Math.min(840, Number(env.TIMEZONE_OFFSET_MINUTES) || 240));
+  return new Date(Date.now() + offset * 60000).toISOString().slice(0, 10);
 }
 
 function voicePrompt(kind, state) {
@@ -302,7 +356,7 @@ function withCors(response, origin) {
   if (origin) headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Vary", "Origin");
   headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data, X-Khnayik-Voice-Kind, Authorization, If-Match");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data, X-Khnayik-Voice-Kind, X-Khnayik-Local-Date, X-Khnayik-Time-Zone, Authorization, If-Match");
   headers.set("Access-Control-Max-Age", "86400");
 
   return new Response(response.body, {

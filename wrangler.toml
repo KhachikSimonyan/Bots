@@ -3,7 +3,7 @@ main = "bot/worker.js"
 compatibility_date = "2026-05-08"
 
 [vars]
-APP_URL = "https://khachiksimonyan.github.io/Bots/?v=20261109-5"
+APP_URL = "https://khachiksimonyan.github.io/Bots/?v=20261109-6"
 CORS_ORIGIN = "https://khachiksimonyan.github.io"
 WEBHOOK_URL = "https://bot.simonyankhachik9.workers.dev/telegram/webhook"
 AUTH_MAX_AGE_SECONDS = "300"

@@ -176,6 +176,17 @@ test("saving an old expense preserves its ID and date when edited", () => {
   assert.equal(run("state.expenses.length"), 1);
 });
 
+test("structured Armenian voice commands fill a concise meeting title, date and time", () => {
+  const { run } = preview();
+  run(`applyVoiceTranscript("task", "Պլանավորիր հանդիպում Արամի հետ վաղը ժամը չորսին նախագծի մասին խոսելու", {
+    title:"Հանդիպում Արամի հետ",date:"2026-11-10",time:"16:00",hasDate:true,hasTime:true
+  })`);
+  assert.equal(run("els.scheduledTitle.value"), "Հանդիպում Արամի հետ");
+  assert.equal(run("els.scheduledDate.value"), "2026-11-10");
+  assert.equal(run("getSelectedTime('scheduledTime')"), "16:00");
+  assert.equal(run("isScheduledFormOpen"), true);
+});
+
 test("recurring months count actual days and their saved completion", () => {
   const { run } = preview();
   run("state.recurringTasks = [{id:'r',title:'Wed',time:'09:00',createdAt:'2026-06-30T12:00:00',days:[3],doneDates:['2026-07-01']}]");
