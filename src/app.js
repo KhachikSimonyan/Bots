@@ -34,6 +34,7 @@ let pendingImports = [];
 let homeScreenStatus = "unknown";
 let standardGreeting = "Բարի օր";
 let activeRecognition = null;
+let activeRecording = null;
 
 const accordionState = {
   fixed: false,
@@ -508,6 +509,12 @@ function bindEvents() {
 
 function initVoiceInput() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const canRecord = Boolean(window.navigator?.mediaDevices?.getUserMedia && window.MediaRecorder);
+  if (CLOUD_MODE && canRecord) {
+    els.expenseVoiceBtn.addEventListener("click", () => toggleServerRecording("expense"));
+    els.taskVoiceBtn.addEventListener("click", () => toggleServerRecording("task"));
+    return;
+  }
   if (!SpeechRecognition) {
     for (const [button, status] of [[els.expenseVoiceBtn, els.expenseVoiceStatus], [els.taskVoiceBtn, els.taskVoiceStatus]]) {
       button.disabled = true;
@@ -519,6 +526,92 @@ function initVoiceInput() {
 
   els.expenseVoiceBtn.addEventListener("click", () => startVoiceRecognition("expense", SpeechRecognition));
   els.taskVoiceBtn.addEventListener("click", () => startVoiceRecognition("task", SpeechRecognition));
+}
+
+async function toggleServerRecording(kind) {
+  if (activeRecording) {
+    if (activeRecording.recorder?.state === "recording") activeRecording.recorder.stop();
+    return;
+  }
+  const button = voiceButton(kind);
+  const status = voiceStatus(kind);
+  activeRecording = { kind, pending: true };
+  button.disabled = true;
+  status.textContent = "Խոսափողը բացվում է…";
+  try {
+    const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"]
+      .find((type) => window.MediaRecorder.isTypeSupported?.(type));
+    const recorder = mimeType ? new window.MediaRecorder(stream, { mimeType }) : new window.MediaRecorder(stream);
+    const chunks = [];
+    activeRecording = { kind, recorder, stream, chunks, timer: 0 };
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data?.size) chunks.push(event.data);
+    });
+    recorder.addEventListener("stop", () => finishServerRecording(activeRecording));
+    recorder.start(250);
+    button.disabled = false;
+    button.classList.add("is-listening");
+    button.setAttribute("aria-pressed", "true");
+    button.textContent = "⏹ Ավարտել և ճանաչել";
+    status.textContent = "Ձայնագրվում է… խոսեք և սեղմեք «Ավարտել»";
+    tg?.HapticFeedback?.impactOccurred?.("light");
+    activeRecording.timer = window.setTimeout(() => {
+      if (recorder.state === "recording") recorder.stop();
+    }, 15000);
+  } catch (error) {
+    activeRecording = null;
+    resetVoiceButton(kind);
+    status.textContent = error?.name === "NotAllowedError"
+      ? "Թույլատրեք խոսափողը՝ iPhone-ի Settings → Telegram → Microphone բաժնում։"
+      : "Խոսափողը չբացվեց։ Փակեք և նորից բացեք Խնայիկը։";
+  }
+}
+
+async function finishServerRecording(recording) {
+  if (!recording?.recorder) return;
+  window.clearTimeout(recording.timer);
+  recording.stream.getTracks().forEach((track) => track.stop());
+  const { kind, chunks, recorder } = recording;
+  const status = voiceStatus(kind);
+  const button = voiceButton(kind);
+  activeRecording = null;
+  button.classList.remove("is-listening");
+  button.setAttribute("aria-pressed", "false");
+  button.disabled = true;
+  button.textContent = "Ճանաչվում է…";
+  status.textContent = "Ձայնը վերծանվում է հայերեն…";
+  try {
+    const audio = new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || "audio/webm" });
+    if (audio.size < 200) throw new Error("Խոսք չլսվեց։ Կրկին փորձեք ավելի բարձր խոսել։");
+    const result = await api("/api/transcribe", {
+      method: "POST",
+      body: audio,
+      headers: { "Content-Type": audio.type || "audio/webm" },
+    });
+    status.textContent = `Լսեցի՝ «${result.text}»`;
+    applyVoiceTranscript(kind, result.text);
+  } catch (error) {
+    voiceProblem(status, error.message || "Ձայնը չհաջողվեց ճանաչել։ Կրկին փորձեք։");
+  } finally {
+    resetVoiceButton(kind);
+  }
+}
+
+function voiceButton(kind) {
+  return kind === "expense" ? els.expenseVoiceBtn : els.taskVoiceBtn;
+}
+
+function voiceStatus(kind) {
+  return kind === "expense" ? els.expenseVoiceStatus : els.taskVoiceStatus;
+}
+
+function resetVoiceButton(kind) {
+  const button = voiceButton(kind);
+  button.disabled = false;
+  button.classList.remove("is-listening");
+  button.setAttribute("aria-pressed", "false");
+  button.textContent = kind === "expense" ? "🎙️ Ձայնով լրացնել" : "🎙️ Ավելացնել գործ ձայնով";
 }
 
 function startVoiceRecognition(kind, SpeechRecognition) {
@@ -1838,7 +1931,8 @@ async function api(path, options = {}) {
     if (!session.userId || !session.token) throw new Error("Մուտքի տվյալները թերի են");
   }
   return request(path, {...options, headers: {
-    ...(options.body ? {"Content-Type":"application/json"} : {}),
+    ...(options.body && !(options.body instanceof Blob) ? {"Content-Type":"application/json"} : {}),
+    ...(options.headers || {}),
     Authorization:"Bearer " + session.token,
   }});
 }

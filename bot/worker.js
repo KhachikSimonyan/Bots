@@ -80,6 +80,25 @@ async function handleApi(request, env, url) {
   if (url.pathname === "/api/backup" && request.method === "GET") {
     return json({ ...(await readState(env,id)), exportedAt: new Date().toISOString(), userId: id });
   }
+  if (url.pathname === "/api/transcribe" && request.method === "POST") {
+    if (!env.AI) return json({ error: "Ձայնային ծառայությունը կարգավորված չէ" }, 503);
+    const contentType = (request.headers.get("Content-Type") || "").split(";", 1)[0].toLowerCase();
+    if (!contentType.startsWith("audio/")) return json({ error: "Ուղարկեք ձայնագրություն" }, 415);
+    const audio = await request.arrayBuffer();
+    if (!audio.byteLength) return json({ error: "Ձայնագրությունը դատարկ է" }, 400);
+    if (audio.byteLength > 2 * 1024 * 1024) return json({ error: "Ձայնագրությունը չափազանց երկար է" }, 413);
+    const result = await env.AI.run("@cf/openai/whisper-large-v3-turbo", {
+      audio: arrayBufferToBase64(audio),
+      task: "transcribe",
+      language: "hy",
+      vad_filter: true,
+      initial_prompt: "Հայերեն անձնական ֆինանսների և գործերի կարճ հրաման։ Օրինակ՝ Գրանցիր 4000 դրամ բենզին։ Վաղը ժամը 15:30 զանգել բժշկին։",
+      condition_on_previous_text: false,
+    });
+    const text = String(result?.text || "").trim();
+    if (!text) return json({ error: "Խոսք չհայտնաբերվեց։ Կրկին փորձեք ավելի բարձր խոսել։" }, 422);
+    return json({ text: text.slice(0, 500) });
+  }
   const restore = url.pathname === "/api/restore" && request.method === "POST";
   if (restore || (url.pathname === "/api/state" && request.method === "PUT")) {
     let body;
@@ -109,6 +128,15 @@ async function handleApi(request, env, url) {
   }
 
   return json({ error: "Not found" }, 404);
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 32768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+  }
+  return btoa(binary);
 }
 
 async function handleTelegramWebhook(request, env) {

@@ -53,8 +53,17 @@ function initData(id, ageSeconds = 0) {
   return params.toString();
 }
 
-test("auth, account isolation, atomic revision, durable retries and large state", async () => {
-  const env = { DB: database(), " BOT_TOKEN": botToken, CORS_ORIGIN: origin };
+test("auth, account isolation, voice transcription, atomic revision and durable retries", async () => {
+  const env = {
+    DB: database(), " BOT_TOKEN": botToken, CORS_ORIGIN: origin,
+    AI: { run: async (model, input) => {
+      assert.equal(model, "@cf/openai/whisper-large-v3-turbo");
+      assert.equal(input.language, "hy");
+      assert.equal(input.task, "transcribe");
+      assert.ok(input.audio.length > 0);
+      return { text: "Գրանցիր 4000 դրամ բենզին" };
+    } },
+  };
   const send = (path, options) => worker.fetch(new Request(base + path, options), env);
   const session = (id, age) => send("/api/session", {
     method:"POST", headers:{Origin:origin,"X-Telegram-Init-Data":initData(id,age)},
@@ -69,6 +78,10 @@ test("auth, account isolation, atomic revision, durable retries and large state"
     method:"PUT",headers,body:JSON.stringify({lastKnownUpdatedAt:version,mutationId,state:{...emptyState(),salary,appearance}}),
   });
   assert.equal((await get()).updatedAt,"0");
+  const voice = await send("/api/transcribe", {method:"POST",headers:{...headers,"Content-Type":"audio/webm"},body:new Uint8Array([1,2,3])});
+  assert.equal(voice.status,200);
+  assert.equal((await voice.json()).text,"Գրանցիր 4000 դրամ բենզին");
+  assert.equal((await send("/api/transcribe", {method:"POST",headers,body:"not audio"})).status,415);
   assert.equal((await put(20,null,"missing")).status,428);
   const attempts = await Promise.all([put(100,"0","one"),put(200,"0","two")]);
   assert.deepEqual(attempts.map(r => r.status).sort(),[200,409]);

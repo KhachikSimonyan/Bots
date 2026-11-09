@@ -9,6 +9,9 @@ WEBHOOK_URL = "https://bot.simonyankhachik9.workers.dev/telegram/webhook"
 AUTH_MAX_AGE_SECONDS = "300"
 TIMEZONE_OFFSET_MINUTES = "240"
 
+[ai]
+binding = "AI"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "khnayik-db"
