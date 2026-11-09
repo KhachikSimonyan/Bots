@@ -33,6 +33,7 @@ let messageTimer = 0;
 let pendingImports = [];
 let homeScreenStatus = "unknown";
 let standardGreeting = "Բարի օր";
+let activeRecognition = null;
 
 const accordionState = {
   fixed: false,
@@ -97,6 +98,8 @@ const els = {
   expenseDate: document.getElementById("expenseDate"),
   expenseSubmit: document.getElementById("expenseSubmit"),
   cancelExpenseEdit: document.getElementById("cancelExpenseEdit"),
+  expenseVoiceBtn: document.getElementById("expenseVoiceBtn"),
+  expenseVoiceStatus: document.getElementById("expenseVoiceStatus"),
   expenseList: document.getElementById("expenseList"),
   expenseCount: document.getElementById("expenseCount"),
   clearBtn: document.getElementById("clearBtn"),
@@ -135,6 +138,8 @@ const els = {
   taskList: document.getElementById("taskList"),
   taskCount: document.getElementById("taskCount"),
   taskFilters: document.getElementById("taskFilters"),
+  taskVoiceBtn: document.getElementById("taskVoiceBtn"),
+  taskVoiceStatus: document.getElementById("taskVoiceStatus"),
   backgroundPresets: document.getElementById("backgroundPresets"),
   excelExportBtn: document.getElementById("excelExportBtn"),
   csvExportBtn: document.getElementById("csvExportBtn"),
@@ -314,6 +319,7 @@ function bindEvents() {
   els.incomeDate.value = displayedDay;
   els.savingsDueDate.min = displayedDay;
   els.cancelExpenseEdit.addEventListener("click", resetExpenseForm);
+  initVoiceInput();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refreshCalendar();
   });
@@ -498,6 +504,102 @@ function bindEvents() {
   els.selectAllDaysBtn.addEventListener("click", toggleAllDays);
   els.recurringTaskForm.addEventListener("submit", addRecurringTask);
   els.scheduledTaskForm.addEventListener("submit", addScheduledTask);
+}
+
+function initVoiceInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    for (const [button, status] of [[els.expenseVoiceBtn, els.expenseVoiceStatus], [els.taskVoiceBtn, els.taskVoiceStatus]]) {
+      button.disabled = true;
+      button.classList.add("is-unsupported");
+      status.textContent = "Այս դիտարկիչում օգտագործեք հեռախոսի ստեղնաշարի 🎙️ կոճակը։";
+    }
+    return;
+  }
+
+  els.expenseVoiceBtn.addEventListener("click", () => startVoiceRecognition("expense", SpeechRecognition));
+  els.taskVoiceBtn.addEventListener("click", () => startVoiceRecognition("task", SpeechRecognition));
+}
+
+function startVoiceRecognition(kind, SpeechRecognition) {
+  if (activeRecognition) {
+    activeRecognition.stop();
+    return;
+  }
+  const button = kind === "expense" ? els.expenseVoiceBtn : els.taskVoiceBtn;
+  const status = kind === "expense" ? els.expenseVoiceStatus : els.taskVoiceStatus;
+  const originalLabel = button.textContent;
+  const recognition = new SpeechRecognition();
+  activeRecognition = recognition;
+  recognition.lang = "hy-AM";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  button.classList.add("is-listening");
+  button.setAttribute("aria-pressed", "true");
+  button.textContent = "⏹ Կանգնեցնել";
+  status.textContent = "Լսում եմ… խոսեք բնական ձևով";
+
+  recognition.onresult = (event) => {
+    const transcript = [...event.results].map((result) => result[0].transcript).join(" ").trim();
+    status.textContent = transcript || "Լսում եմ…";
+    if (event.results[event.results.length - 1]?.isFinal) applyVoiceTranscript(kind, transcript);
+  };
+  recognition.onerror = (event) => {
+    const messages = {
+      "not-allowed": "Թույլատրեք խոսափողի հասանելիությունը և կրկին փորձեք։",
+      "audio-capture": "Խոսափողը հասանելի չէ։ Ստուգեք սարքի կարգավորումները։",
+      "no-speech": "Խոսք չլսվեց։ Կրկին սեղմեք և խոսեք։",
+    };
+    status.textContent = messages[event.error] || "Չհաջողվեց ճանաչել խոսքը։ Կրկին փորձեք։";
+  };
+  recognition.onend = () => {
+    activeRecognition = null;
+    button.classList.remove("is-listening");
+    button.setAttribute("aria-pressed", "false");
+    button.textContent = originalLabel;
+  };
+  try {
+    recognition.start();
+  } catch {
+    activeRecognition = null;
+    button.classList.remove("is-listening");
+    button.setAttribute("aria-pressed", "false");
+    button.textContent = originalLabel;
+    status.textContent = "Խոսափողը չբացվեց։ Կրկին փորձեք։";
+  }
+}
+
+function applyVoiceTranscript(kind, transcript) {
+  if (kind === "expense") {
+    const parsed = KhnayikVoice.parseExpense(transcript);
+    if (parsed.error === "amount") return voiceProblem(els.expenseVoiceStatus, "Գումարը չհասկացա։ Ասեք, օրինակ՝ «4,000 դրամ բենզին»։");
+    if (parsed.error) return voiceProblem(els.expenseVoiceStatus, "Ծախսի անվանումը չհասկացա։ Կրկին փորձեք։");
+    els.expenseTitle.value = parsed.title;
+    els.expenseAmount.value = String(parsed.amount);
+    els.expenseCategory.value = KhnayikFinance.inferCategory(parsed.title);
+    els.expenseDate.value = getDateKey(new Date());
+    els.expenseVoiceStatus.textContent = `Լրացված է՝ ${parsed.title}, ${formatMoney(parsed.amount)}։ Ստուգեք և պահպանեք։`;
+    els.expenseSubmit.focus();
+    tg?.HapticFeedback?.notificationOccurred?.("success");
+    return;
+  }
+
+  const parsed = KhnayikVoice.parseTask(transcript, new Date());
+  if (parsed.error) return voiceProblem(els.taskVoiceStatus, "Գործի անվանումը չհասկացա։ Կրկին փորձեք։");
+  isScheduledFormOpen = true;
+  renderScheduledFormVisibility();
+  els.scheduledTitle.value = parsed.title;
+  els.scheduledDate.value = parsed.date;
+  setSelectedTime("scheduledTime", parsed.time);
+  els.taskVoiceStatus.textContent = `Լրացված է՝ ${parsed.title}։ Ստուգեք օրը, ժամը և պահպանեք։`;
+  els.scheduledTaskForm.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  els.scheduledTitle.focus();
+  tg?.HapticFeedback?.notificationOccurred?.("success");
+}
+
+function voiceProblem(status, message) {
+  status.textContent = message;
+  tg?.HapticFeedback?.notificationOccurred?.("error");
 }
 
 function saveDebtSettings() {
@@ -2429,6 +2531,13 @@ function getSelectedTime(key) {
 function resetTimePicker(key) {
   els[`${key}Hour`].value = "09";
   els[`${key}Minute`].value = "00";
+}
+
+function setSelectedTime(key, value) {
+  const [hour = "09", minute = "00"] = String(value || "").split(":");
+  els[`${key}Hour`].value = hour.padStart(2, "0");
+  const roundedMinute = String(Math.floor(Number(minute) / 5) * 5).padStart(2, "0");
+  els[`${key}Minute`].value = roundedMinute;
 }
 
 function getCustomReminderAt(date, time) {

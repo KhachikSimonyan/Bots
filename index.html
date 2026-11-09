@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/styles.css?v=20261109-2" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261109-3" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -138,6 +138,10 @@
         </button>
         <div class="accordion-panel" id="addExpensePanel">
         <form class="expense-form" id="expenseForm">
+          <div class="voice-entry">
+            <button class="voice-button" id="expenseVoiceBtn" type="button" aria-pressed="false">🎙️ Ձայնով լրացնել</button>
+            <small id="expenseVoiceStatus" role="status">Օրինակ՝ «Գրանցիր 4,000 դրամ բենզին»</small>
+          </div>
           <label class="form-field">Անվանում<input id="expenseTitle" placeholder="օր. սուրճ, մթերք" required /></label>
           <div class="two-col">
             <label class="form-field">Գումար<input id="expenseAmount" inputmode="numeric" placeholder="ամբողջ դրամով" required /></label>
@@ -474,6 +478,10 @@
             <option value="both">Երկու եղանակով</option>
           </select>
         </label>
+        <section class="voice-card">
+          <button class="voice-button" id="taskVoiceBtn" type="button" aria-pressed="false">🎙️ Ավելացնել գործ ձայնով</button>
+          <small id="taskVoiceStatus" role="status">Օրինակ՝ «Ավելացրու գործ՝ վաղը ժամը 15:30 զանգել բժշկին»</small>
+        </section>
         <section class="card accordion-card">
           <button class="section-toggle" data-accordion="recurringTasks" type="button" aria-expanded="true">
             <span class="section-toggle-copy">
@@ -623,8 +631,9 @@
 <script src="./src/reminder-time.js?v=20261108-1"></script>
 <script src="./src/debt-plan.js?v=20261108-1"></script>
 <script src="./src/finance-tools.js?v=20261108-1"></script>
+<script src="./src/voice-input.js?v=20261109-1"></script>
 <script src="./src/sync.js?v=20261108-1"></script>
-<script src="./src/app.js?v=20261109-2"></script>
+<script src="./src/app.js?v=20261109-3"></script>
 
   </body>
 </html>

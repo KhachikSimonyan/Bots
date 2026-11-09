@@ -834,6 +834,57 @@ select:focus {
   gap: 10px;
 }
 
+.voice-entry,
+.voice-card {
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  border: 1px solid rgba(50, 122, 95, 0.18);
+  border-radius: 16px;
+  background: rgba(143, 201, 167, 0.12);
+}
+
+.voice-card {
+  margin-block: 12px;
+  box-shadow: var(--shadow);
+}
+
+.voice-entry small,
+.voice-card small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.voice-button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--green);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.voice-button.is-listening {
+  background: var(--coral);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-button.is-unsupported {
+  background: #80796e;
+  cursor: default;
+}
+
+@keyframes voice-pulse {
+  50% { box-shadow: 0 0 0 6px rgba(216, 97, 69, 0.16); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-button.is-listening { animation: none; }
+}
+
 .two-col > * {
   flex: 1;
 }
