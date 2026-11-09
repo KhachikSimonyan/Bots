@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/styles.css?v=20261109-1" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261109-2" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -402,13 +402,12 @@
           <p class="backup-note" id="homeScreenNote" role="status">Կստեղծվի Խնայիկի նշանը հեռախոսի գլխավոր էկրանին։</p>
         </section>
 
-        <section class="card backup-card">
-          <div class="section-head">
-            <div>
-              <h2>Ֆոնային նկար</h2>
-              <p>Ընտրեք պատրաստ տարբերակ կամ ավելացրեք ձեր նկարը</p>
-            </div>
-          </div>
+        <section class="card backup-card accordion-card">
+          <button class="section-toggle" data-accordion="appearanceSettings" type="button" aria-expanded="false">
+            <span class="section-toggle-copy"><strong>Ֆոնային նկար</strong><small>Գույն կամ ձեր նկարը</small></span>
+            <span class="section-toggle-meta">Բացել</span>
+          </button>
+          <div class="accordion-panel is-hidden" id="appearanceSettingsPanel">
           <div class="preset-grid" id="backgroundPresets"></div>
           <div class="backup-grid">
             <label class="restore-control">
@@ -418,6 +417,7 @@
             <button class="secondary-button" id="removeBackgroundBtn" type="button">Հեռացնել ֆոնը</button>
           </div>
           <p class="backup-note" id="backgroundNote">Լավ է ընտրել մինչև 1MB չափի նկար, որ cloud պահպանումը արագ մնա։</p>
+          </div>
         </section>
 
         <section class="card backup-card">
@@ -584,7 +584,7 @@
             <span class="section-toggle-meta">Փակել</span>
           </button>
           <div class="accordion-panel" id="taskListPanel">
-          <div class="filter-row" aria-label="Գործերի զտիչներ">
+          <div class="filter-row" id="taskFilters" aria-label="Գործերի զտիչներ">
             <button class="filter-chip is-active" data-task-filter="all" type="button">Բոլորը</button>
             <button class="filter-chip" data-task-filter="done" type="button">Կատարված</button>
             <button class="filter-chip" data-task-filter="todo" type="button">Չկատարված</button>
@@ -624,7 +624,7 @@
 <script src="./src/debt-plan.js?v=20261108-1"></script>
 <script src="./src/finance-tools.js?v=20261108-1"></script>
 <script src="./src/sync.js?v=20261108-1"></script>
-<script src="./src/app.js?v=20261109-1"></script>
+<script src="./src/app.js?v=20261109-2"></script>
 
   </body>
 </html>

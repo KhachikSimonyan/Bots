@@ -32,6 +32,7 @@ let syncDescription = "";
 let messageTimer = 0;
 let pendingImports = [];
 let homeScreenStatus = "unknown";
+let standardGreeting = "Բարի օր";
 
 const accordionState = {
   fixed: false,
@@ -45,6 +46,7 @@ const accordionState = {
   savingsGoals: false,
   debtStrategySettings: false,
   debtForm: false,
+  appearanceSettings: false,
 };
 
 const els = {
@@ -132,6 +134,7 @@ const els = {
   scheduledReminderTimeMinute: document.getElementById("scheduledReminderTimeMinute"),
   taskList: document.getElementById("taskList"),
   taskCount: document.getElementById("taskCount"),
+  taskFilters: document.getElementById("taskFilters"),
   backgroundPresets: document.getElementById("backgroundPresets"),
   excelExportBtn: document.getElementById("excelExportBtn"),
   csvExportBtn: document.getElementById("csvExportBtn"),
@@ -269,7 +272,8 @@ function initTelegram() {
   }
 
   const name = tg.initDataUnsafe?.user?.first_name;
-  if (name) els.greeting.textContent = `Բարի օր, ${name}`;
+  if (name) standardGreeting = `Բարի օր, ${name}`;
+  els.greeting.textContent = standardGreeting;
 
   tg.onEvent?.("homeScreenAdded", () => {
     homeScreenStatus = "added";
@@ -699,6 +703,7 @@ function renderView() {
   els.menuBtn.classList.toggle("is-active", activeView === "settings");
   els.menuBtn.textContent = activeView === "settings" ? "Վերադառնալ" : "Կարգավորումներ";
   els.menuBtn.setAttribute("aria-label", activeView === "settings" ? "Վերադառնալ բյուջե" : "Բացել կարգավորումները");
+  els.greeting.textContent = activeView === "settings" ? "Կարգավորումներ" : standardGreeting;
   els.appEyebrow.textContent = {
     budget: "Իմ բյուջեն",
     plan: "Ֆինանսական պլան",
@@ -1419,14 +1424,15 @@ function renderMonthExpenses(monthKey) {
     ? `Աշխատավարձ (${budget.salaryDay || state.salaryDay}-ին)` : "Աշխատավարձ";
   const salaryValue = budget.salaryMode === "variable" && budget.salaryConfirmed === false
     ? "Չի մուտքագրվել" : formatMoney(budget.salary);
-  addMonthTotalRow(salaryLabel, salaryValue);
-  if (extraIncome) addMonthTotalRow("Այլ եկամուտներ", formatMoney(extraIncome));
-  addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal));
-  if (budget.fixedExpenses.length) addMonthTotalRow("Վճարված ֆիքսվածներ", `${fixedPaid}/${budget.fixedExpenses.length}`);
-  addMonthTotalRow("Առօրյա ծախսեր", formatMoney(spent));
-  addMonthTotalRow("Պարտքերի վճարումներ", formatMoney(debtPaid));
-  if (savings) addMonthTotalRow("Պլանավորված խնայողություն", formatMoney(savings));
-  addMonthTotalRow("Ազատ մնացորդ", formatMoney(budget.salary + extraIncome - fixedTotal - savings - spent - debtPaid));
+  addMonthTotalRow(salaryLabel, salaryValue, salaryValue === "Չի մուտքագրվել" ? "neutral" : "positive");
+  if (extraIncome) addMonthTotalRow("Այլ եկամուտներ", formatMoney(extraIncome), "positive");
+  addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal), "negative");
+  if (budget.fixedExpenses.length) addMonthTotalRow("Վճարված ֆիքսվածներ", `${fixedPaid}/${budget.fixedExpenses.length}`, "neutral");
+  addMonthTotalRow("Առօրյա ծախսեր", formatMoney(spent), "negative");
+  addMonthTotalRow("Պարտքերի վճարումներ", formatMoney(debtPaid), "negative");
+  if (savings) addMonthTotalRow("Պլանավորված խնայողություն", formatMoney(savings), "negative");
+  const freeBalance = budget.salary + extraIncome - fixedTotal - savings - spent - debtPaid;
+  addMonthTotalRow("Ազատ մնացորդ", formatMoney(freeBalance), freeBalance >= 0 ? "positive" : "negative");
   if (!expenses.length && !debtPayments.length) return;
 
   const max = Math.max(...expenses.map((expense) => Number(expense.amount || 0)), ...debtPayments.map((payment) => Number(payment.amount || 0)), 1);
@@ -1480,7 +1486,7 @@ function renderMonthTasks(monthKey) {
     return;
   }
 
-  addMonthTotalRow("Ընդհանուր գործ", `${tasks.length}`);
+  addMonthTotalRow("Ընդհանուր գործ", `${tasks.length}`, "neutral");
   tasks.forEach((task) => {
     const row = document.createElement("article");
     row.className = "month-item";
@@ -1492,9 +1498,9 @@ function renderMonthTasks(monthKey) {
   });
 }
 
-function addMonthTotalRow(label, value) {
+function addMonthTotalRow(label, value, tone = "neutral") {
   const row = document.createElement("article");
-  row.className = "month-item month-total";
+  row.className = `month-item month-total is-${tone}`;
   row.innerHTML = `<div class="month-line"><strong></strong><span></span></div>`;
   row.querySelector("strong").textContent = label;
   row.querySelector("span").textContent = value;
@@ -1507,6 +1513,7 @@ function renderTasks() {
   els.todayTaskCount.textContent = `${todayItems.length} գործ`;
   els.taskCount.textContent = allCount ? `${allCount} գործ` : "Դեռ գործ չկա";
   els.allowNotificationsBtn.textContent = getNotificationButtonText();
+  els.taskFilters.hidden = !allCount;
   document.getElementById("reminderChannelSetting").hidden = !CLOUD_MODE;
   document.getElementById("reminderChannel").value = reminderChannel();
   els.taskList.innerHTML = "";
@@ -1607,9 +1614,13 @@ function renderHomeScreenInstall() {
   if (!els.addHomeScreenBtn || !els.homeScreenNote) return;
   const supported = Boolean(tg?.isVersionAtLeast?.("8.0") && typeof tg.addToHomeScreen === "function");
   const added = homeScreenStatus === "added";
-  els.addHomeScreenBtn.disabled = added;
+  els.addHomeScreenBtn.disabled = added || !supported;
   els.addHomeScreenBtn.classList.toggle("is-complete", added);
-  els.addHomeScreenBtn.textContent = added ? "Ավելացված է գլխավոր էկրանին" : "Ավելացնել գլխավոր էկրանին";
+  els.addHomeScreenBtn.textContent = added
+    ? "Ավելացված է գլխավոր էկրանին"
+    : supported
+      ? "Ավելացնել գլխավոր էկրանին"
+      : "Բացեք Telegram-ով";
   els.homeScreenNote.textContent = added
     ? "Խնայիկի նշանն արդեն կա հեռախոսի գլխավոր էկրանին։"
     : supported
@@ -2556,11 +2567,11 @@ function showMessage(message, type = "error") {
 
 function getNotificationButtonText() {
   const channel = reminderChannel();
-  const telegram = telegramRemindersLinked ? "Telegram-ը միացված է" : "Միացնել Telegram-ի հիշեցումները";
+  const telegram = telegramRemindersLinked ? "Telegram-ը միացված է" : "Միացնել հիշեցումները";
   if (channel === "telegram") return telegram;
   const device = "Notification" in window && Notification.permission === "granted"
-    ? "Սարքի ծանուցումները միացված են" : "Սարքի հիշեցումների կարգավորումներ";
-  return channel === "both" ? telegram + " · " + device : device;
+    ? "Սարքի հիշեցումները միացված են" : "Սարքի հիշեցումներ";
+  return channel === "both" ? "Հիշեցումների կարգավորումներ" : device;
 }
 
 function getInitData() {
