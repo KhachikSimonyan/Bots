@@ -102,14 +102,19 @@ async function handleApi(request, env, url) {
     const text = String(result?.text || "").trim();
     if (!text) return json({ error: "Խոսք չհայտնաբերվեց։ Կրկին փորձեք ավելի բարձր խոսել։" }, 422);
     let task = null;
+    let expense = null;
     if (kind === "task") {
       const requestedDate = request.headers.get("X-Khnayik-Local-Date") || "";
       const localDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : localDateKey(env);
       const timeZone = String(request.headers.get("X-Khnayik-Time-Zone") || "Asia/Yerevan").replace(/[^A-Za-z_+\/-]/g, "").slice(0, 50);
-      try { task = await extractTaskDetails(env, text, localDate, timeZone); }
+      try { task = await extractTaskDetails(env, text, localDate, timeZone, stored.state); }
       catch (error) { console.warn("Task extraction fallback", error?.name || "Error"); }
+    } else {
+      try { expense = await extractExpenseDetails(env, text, stored.state); }
+      catch (error) { console.warn("Expense extraction fallback", error?.name || "Error"); }
     }
-    return json({ text: text.slice(0, 500), task });
+    const correctedText = String(task?.correctedText || expense?.correctedText || text).trim().slice(0, 500);
+    return json({ text: correctedText, rawText: text.slice(0, 500), task, expense });
   }
   const restore = url.pathname === "/api/restore" && request.method === "POST";
   if (restore || (url.pathname === "/api/state" && request.method === "PUT")) {
@@ -142,12 +147,13 @@ async function handleApi(request, env, url) {
   return json({ error: "Not found" }, 404);
 }
 
-async function extractTaskDetails(env, transcript, localDate, timeZone) {
+async function extractTaskDetails(env, transcript, localDate, timeZone, state) {
+  const vocabulary = voiceVocabulary(state, "task");
   const response = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages: [
       {
         role: "system",
-        content: `Դու հայերեն ձայնային հրամաններից հանդիպում կամ գործ ես առանձնացնում։ Այսօր ${localDate} է, ժամային գոտին՝ ${timeZone}։ Վերնագիրը դարձրու կարճ, հստակ և առավելագույնը 60 նիշ՝ առանց «պլանավորիր», «ավելացրու», ամսաթվի, ժամի ու երկար բացատրության։ Եթե խոսքում օր կամ ժամ չկա, համապատասխան hasDate/hasTime-ը դարձրու false և արժեքը թող դատարկ։ Հարաբերական օրերը վերածիր YYYY-MM-DD-ի։ «Ժամը չորսին» հանդիպման համար սովորաբար 16:00 է, իսկ առավոտյան/երեկոյան նշումները պարտադիր հաշվի առ։ Մի հորինիր չասված օր կամ ժամ։`,
+        content: `Դու ուղղում և կառուցվածք ես տալիս հայերեն ձայնային հրամանին։ Ուղղիր միայն ակնհայտ ASR/ուղղագրական սխալները, պահպանիր բոլոր անունները, թվերը, օրերն ու ժամերը, իսկ անվստահ բառերը մի հորինիր։ Այսօր ${localDate} է, ժամային գոտին՝ ${timeZone}։ Վերնագիրը դարձրու կարճ ու առավելագույնը 60 նիշ՝ առանց հրամանի, ամսաթվի, ժամի ու երկար բացատրության։ Եթե խոսքում օր կամ ժամ չկա, hasDate/hasTime-ը false է և արժեքը դատարկ։ Հարաբերական օրերը վերածիր YYYY-MM-DD-ի։ «Ժամը չորսին» հանդիպման համար սովորաբար 16:00 է։${vocabulary ? ` Ծանոթ բառեր՝ ${vocabulary}։` : ""}`,
       },
       { role: "user", content: String(transcript).slice(0, 500) },
     ],
@@ -158,23 +164,63 @@ async function extractTaskDetails(env, transcript, localDate, timeZone) {
       json_schema: {
         type: "object",
         properties: {
+          correctedText: { type: "string", maxLength: 300 },
           title: { type: "string", maxLength: 60 },
           date: { type: "string" },
           time: { type: "string" },
           hasDate: { type: "boolean" },
           hasTime: { type: "boolean" },
         },
-        required: ["title", "date", "time", "hasDate", "hasTime"],
+        required: ["correctedText", "title", "date", "time", "hasDate", "hasTime"],
         additionalProperties: false,
       },
     },
   });
   const value = response?.response;
+  const correctedText = String(value?.correctedText || transcript).replace(/\s+/g, " ").trim().slice(0, 300);
   const title = String(value?.title || "").replace(/\s+/g, " ").trim().slice(0, 60);
   const hasDate = value?.hasDate === true && validDay(value.date) && value.date >= localDate;
   const hasTime = value?.hasTime === true && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.time);
   if (!title) return null;
-  return { title, date: hasDate ? value.date : "", time: hasTime ? value.time : "", hasDate, hasTime };
+  return { correctedText, title, date: hasDate ? value.date : "", time: hasTime ? value.time : "", hasDate, hasTime };
+}
+
+async function extractExpenseDetails(env, transcript, state) {
+  const vocabulary = voiceVocabulary(state, "expense");
+  const response = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [
+      {
+        role: "system",
+        content: `Դու ուղղում և կառուցվածք ես տալիս հայերեն ծախսի ձայնային հրամանին։ Ուղղիր միայն ակնհայտ ASR/ուղղագրական սխալները։ Երբեք մի փոխիր կամ հորինիր գումարը։ Վերնագրից հանիր «գրանցիր», «ավելացրու», գումարը և «դրամ» բառը։ Կատեգորիան ընտրիր միայն տրված ցանկից։ Եթե գումարը հստակ չի ասվել, hasAmount=false և amount=0։${vocabulary ? ` Ծանոթ բառեր՝ ${vocabulary}։` : ""}`,
+      },
+      { role: "user", content: String(transcript).slice(0, 500) },
+    ],
+    max_tokens: 160,
+    temperature: 0,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "object",
+        properties: {
+          correctedText: { type: "string", maxLength: 300 },
+          title: { type: "string", maxLength: 60 },
+          amount: { type: "integer", minimum: 0, maximum: 100000000 },
+          category: { type: "string", enum: ["Սնունդ", "Տրանսպորտ", "Տուն", "Առողջություն", "Ժամանց", "Այլ"] },
+          hasAmount: { type: "boolean" },
+        },
+        required: ["correctedText", "title", "amount", "category", "hasAmount"],
+        additionalProperties: false,
+      },
+    },
+  });
+  const value = response?.response;
+  const correctedText = String(value?.correctedText || transcript).replace(/\s+/g, " ").trim().slice(0, 300);
+  const title = String(value?.title || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const amount = Number(value?.amount);
+  const hasAmount = value?.hasAmount === true && Number.isSafeInteger(amount) && amount > 0 && amount <= 100000000;
+  const categories = ["Սնունդ", "Տրանսպորտ", "Տուն", "Առողջություն", "Ժամանց", "Այլ"];
+  if (!title) return null;
+  return { correctedText, title, amount: hasAmount ? amount : 0, category: categories.includes(value.category) ? value.category : "Այլ", hasAmount };
 }
 
 function validDay(value) {
@@ -199,6 +245,15 @@ function voicePrompt(kind, state) {
     ? "Հայերեն մեկանգամյա գործի կարճ հրաման։ Ամսաթիվը, ժամը և անունը գրիր ճշգրիտ։ Օրինակ՝ Ավելացրու գործ՝ վաղը ժամը 15:30 զանգել բժշկին։ Այսօր ժամը երեքին գնել դեղ։"
     : "Հայերեն ծախսի կարճ հրաման։ Գումարը գրիր թվանշաններով և պահպանիր ապրանքի անունը։ Օրինակ՝ Գրանցիր 4000 դրամ բենզին։ Ավելացրու 12500 դրամ սուպերմարկետ։";
   return vocabulary.length ? `${base} Հնարավոր ծանոթ բառեր՝ ${vocabulary.join(", ")}։` : base;
+}
+
+function voiceVocabulary(state, kind) {
+  const lists = kind === "task"
+    ? [state?.scheduledTasks, state?.recurringTasks]
+    : [state?.expenses, state?.fixedExpenses, state?.debts];
+  return [...new Set(lists.flatMap((items) => Array.isArray(items) ? items : [])
+    .map((item) => String(item?.title || "").replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40))
+    .filter(Boolean))].slice(0, 15).join(", ");
 }
 
 function arrayBufferToBase64(buffer) {

@@ -187,6 +187,16 @@ test("structured Armenian voice commands fill a concise meeting title, date and 
   assert.equal(run("isScheduledFormOpen"), true);
 });
 
+test("corrected Armenian voice commands fill expense fields without changing the spoken amount", () => {
+  const { run } = preview();
+  run(`applyVoiceTranscript("expense", "Գրանցիր 4000 դրամ բենզին", {
+    title:"Բենզին",amount:4000,category:"Տրանսպորտ",hasAmount:true
+  })`);
+  assert.equal(run("els.expenseTitle.value"), "Բենզին");
+  assert.equal(run("els.expenseAmount.value"), "4000");
+  assert.equal(run("els.expenseCategory.value"), "Տրանսպորտ");
+});
+
 test("recurring months count actual days and their saved completion", () => {
   const { run } = preview();
   run("state.recurringTasks = [{id:'r',title:'Wed',time:'09:00',createdAt:'2026-06-30T12:00:00',days:[3],doneDates:['2026-07-01']}]");

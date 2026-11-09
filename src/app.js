@@ -556,12 +556,12 @@ async function toggleServerRecording(kind) {
       if (event.data?.size) chunks.push(event.data);
     });
     recorder.addEventListener("stop", () => finishServerRecording(activeRecording));
-    recorder.start(250);
+    recorder.start();
     button.disabled = false;
     button.classList.add("is-listening");
     button.setAttribute("aria-pressed", "true");
     button.textContent = "⏹ Ավարտել և ճանաչել";
-    status.textContent = "Ձայնագրվում է… խոսեք և սեղմեք «Ավարտել»";
+    status.textContent = "Ձայնագրվում է… խոսեք հստակ և սեղմեք «Ավարտել»";
     tg?.HapticFeedback?.impactOccurred?.("light");
     activeRecording.timer = window.setTimeout(() => {
       if (recorder.state === "recording") recorder.stop();
@@ -602,7 +602,7 @@ async function finishServerRecording(recording) {
       },
     });
     status.textContent = `Լսեցի՝ «${result.text}»`;
-    applyVoiceTranscript(kind, result.text, result.task);
+    applyVoiceTranscript(kind, result.text, result.task || result.expense);
   } catch (error) {
     voiceProblem(status, error.message || "Ձայնը չհաջողվեց ճանաչել։ Կրկին փորձեք։");
   } finally {
@@ -674,16 +674,18 @@ function startVoiceRecognition(kind, SpeechRecognition) {
   }
 }
 
-function applyVoiceTranscript(kind, transcript, taskDetails = null) {
+function applyVoiceTranscript(kind, transcript, details = null) {
   if (kind === "expense") {
     const parsed = KhnayikVoice.parseExpense(transcript);
-    if (parsed.error === "amount") return voiceProblem(els.expenseVoiceStatus, "Գումարը չհասկացա։ Ասեք, օրինակ՝ «4,000 դրամ բենզին»։");
-    if (parsed.error) return voiceProblem(els.expenseVoiceStatus, "Ծախսի անվանումը չհասկացա։ Կրկին փորձեք։");
-    els.expenseTitle.value = parsed.title;
-    els.expenseAmount.value = String(parsed.amount);
-    els.expenseCategory.value = KhnayikFinance.inferCategory(parsed.title);
+    const title = String(details?.title || parsed.title || "").trim().slice(0, 60);
+    const amount = details?.hasAmount ? Number(details.amount) : parsed.amount;
+    if (!Number.isSafeInteger(amount) || amount <= 0) return voiceProblem(els.expenseVoiceStatus, "Գումարը չհասկացա։ Ասեք, օրինակ՝ «4,000 դրամ բենզին»։");
+    if (!title) return voiceProblem(els.expenseVoiceStatus, "Ծախսի անվանումը չհասկացա։ Կրկին փորձեք։");
+    els.expenseTitle.value = title;
+    els.expenseAmount.value = String(amount);
+    els.expenseCategory.value = details?.category || KhnayikFinance.inferCategory(title);
     els.expenseDate.value = getDateKey(new Date());
-    els.expenseVoiceStatus.textContent = `Լրացված է՝ ${parsed.title}, ${formatMoney(parsed.amount)}։ Ստուգեք և պահպանեք։`;
+    els.expenseVoiceStatus.textContent = `Լրացված է՝ ${title}, ${formatMoney(amount)}։ Ստուգեք և պահպանեք։`;
     els.expenseSubmit.focus();
     tg?.HapticFeedback?.notificationOccurred?.("success");
     return;
@@ -691,10 +693,10 @@ function applyVoiceTranscript(kind, transcript, taskDetails = null) {
 
   const parsed = KhnayikVoice.parseTask(transcript, new Date());
   if (parsed.error) return voiceProblem(els.taskVoiceStatus, "Գործի անվանումը չհասկացա։ Կրկին փորձեք։");
-  const aiTitle = String(taskDetails?.title || "").trim().slice(0, 60);
+  const aiTitle = String(details?.title || "").trim().slice(0, 60);
   const title = aiTitle || parsed.title;
-  const date = taskDetails?.hasDate ? taskDetails.date : parsed.date;
-  const time = taskDetails?.hasTime ? taskDetails.time : parsed.time;
+  const date = details?.hasDate ? details.date : parsed.date;
+  const time = details?.hasTime ? details.time : parsed.time;
   isScheduledFormOpen = true;
   renderScheduledFormVisibility();
   els.scheduledTitle.value = title;
