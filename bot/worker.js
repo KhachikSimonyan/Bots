@@ -87,12 +87,16 @@ async function handleApi(request, env, url) {
     const audio = await request.arrayBuffer();
     if (!audio.byteLength) return json({ error: "Ձայնագրությունը դատարկ է" }, 400);
     if (audio.byteLength > 2 * 1024 * 1024) return json({ error: "Ձայնագրությունը չափազանց երկար է" }, 413);
+    const kind = request.headers.get("X-Khnayik-Voice-Kind") === "task" ? "task" : "expense";
+    const stored = await readState(env, id);
     const result = await env.AI.run("@cf/openai/whisper-large-v3-turbo", {
       audio: arrayBufferToBase64(audio),
       task: "transcribe",
       language: "hy",
       vad_filter: true,
-      initial_prompt: "Հայերեն անձնական ֆինանսների և գործերի կարճ հրաման։ Օրինակ՝ Գրանցիր 4000 դրամ բենզին։ Վաղը ժամը 15:30 զանգել բժշկին։",
+      beam_size: 8,
+      no_speech_threshold: 0.45,
+      initial_prompt: voicePrompt(kind, stored.state),
       condition_on_previous_text: false,
     });
     const text = String(result?.text || "").trim();
@@ -128,6 +132,19 @@ async function handleApi(request, env, url) {
   }
 
   return json({ error: "Not found" }, 404);
+}
+
+function voicePrompt(kind, state) {
+  const lists = kind === "task"
+    ? [state.scheduledTasks, state.recurringTasks]
+    : [state.expenses, state.fixedExpenses, state.debts];
+  const vocabulary = [...new Set(lists.flatMap((items) => Array.isArray(items) ? items : [])
+    .map((item) => String(item?.title || "").replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40))
+    .filter(Boolean))].slice(0, 15);
+  const base = kind === "task"
+    ? "Հայերեն մեկանգամյա գործի կարճ հրաման։ Ամսաթիվը, ժամը և անունը գրիր ճշգրիտ։ Օրինակ՝ Ավելացրու գործ՝ վաղը ժամը 15:30 զանգել բժշկին։ Այսօր ժամը երեքին գնել դեղ։"
+    : "Հայերեն ծախսի կարճ հրաման։ Գումարը գրիր թվանշաններով և պահպանիր ապրանքի անունը։ Օրինակ՝ Գրանցիր 4000 դրամ բենզին։ Ավելացրու 12500 դրամ սուպերմարկետ։";
+  return vocabulary.length ? `${base} Հնարավոր ծանոթ բառեր՝ ${vocabulary.join(", ")}։` : base;
 }
 
 function arrayBufferToBase64(buffer) {
@@ -285,7 +302,7 @@ function withCors(response, origin) {
   if (origin) headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Vary", "Origin");
   headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data, Authorization, If-Match");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data, X-Khnayik-Voice-Kind, Authorization, If-Match");
   headers.set("Access-Control-Max-Age", "86400");
 
   return new Response(response.body, {

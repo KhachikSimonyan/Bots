@@ -539,7 +539,14 @@ async function toggleServerRecording(kind) {
   button.disabled = true;
   status.textContent = "Խոսափողը բացվում է…";
   try {
-    const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await window.navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
     const mimeType = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"]
       .find((type) => window.MediaRecorder.isTypeSupported?.(type));
     const recorder = mimeType ? new window.MediaRecorder(stream, { mimeType }) : new window.MediaRecorder(stream);
@@ -587,7 +594,10 @@ async function finishServerRecording(recording) {
     const result = await api("/api/transcribe", {
       method: "POST",
       body: audio,
-      headers: { "Content-Type": audio.type || "audio/webm" },
+      headers: {
+        "Content-Type": audio.type || "audio/webm",
+        "X-Khnayik-Voice-Kind": kind,
+      },
     });
     status.textContent = `Լսեցի՝ «${result.text}»`;
     applyVoiceTranscript(kind, result.text);

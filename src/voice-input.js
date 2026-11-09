@@ -49,7 +49,8 @@ globalThis.KhnayikVoice = (() => {
       let matched = 0;
       for (let index = start; index < tokens.length; index += 1) {
         const token = tokens[index].replace(/ին$/, "");
-        if (units.has(token)) group += units.get(token);
+        if (/^\d+$/.test(token)) group += Number(token);
+        else if (units.has(token)) group += units.get(token);
         else if (tens.has(token)) group += tens.get(token);
         else if (token === "հարյուր") group = (group || 1) * 100;
         else if (token === "հազար") { total += (group || 1) * 1000; group = 0; }
@@ -77,9 +78,13 @@ globalThis.KhnayikVoice = (() => {
 
   function parseExpense(transcript) {
     const text = clean(transcript);
-    const found = numericAmount(text) || spokenAmount(text);
+    const found = [numericAmount(text), spokenAmount(text)]
+      .filter(Boolean)
+      .sort((a, b) => b.raw.length - a.raw.length)[0];
     if (!found) return { error: "amount", transcript: text };
-    let title = stripWords(text, [...commandWords, found.raw, "դրամ", "դր", "֏", "կանխիկ", "քարտով", "քարտ"]);
+    let title = stripWords(text, [
+      ...commandWords, found.raw, "դրամ", "դրամի", "դրամով", "դր", "֏", "կանխիկ", "կանխիկով", "քարտով", "քարտ",
+    ]);
     title = title.replace(/^ի համար\s+|\s+ի համար$/gu, "").trim();
     if (!title) return { error: "title", amount: found.amount, transcript: text };
     return { title, amount: found.amount, transcript: text };
@@ -95,6 +100,14 @@ globalThis.KhnayikVoice = (() => {
     match = text.match(/ժամը?\s+(\d{1,2})(?:-?ին)?(?=\s|$)/u);
     if (match && Number(match[1]) < 24) {
       return { time: `${String(Number(match[1])).padStart(2, "0")}:00`, raw: match[0].trim() };
+    }
+    match = text.match(/ժամը?\s+([ա-ֆև]+)(?=\s|$)/u);
+    if (match) {
+      const word = match[1].replace(/ին$/, "");
+      const hour = units.get(word) ?? tens.get(word);
+      if (Number.isInteger(hour) && hour < 24) {
+        return { time: `${String(hour).padStart(2, "0")}:00`, raw: match[0].trim() };
+      }
     }
     return null;
   }

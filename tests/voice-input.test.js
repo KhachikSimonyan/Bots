@@ -14,6 +14,8 @@ test("voice expenses parse digits, spoken amounts and useful titles", () => {
     { title: "բենզին", amount: 4000, transcript: "գրանցիր 4 000 դրամ բենզին" },
   );
   assert.equal(voice.parseExpense("Ավելացրու չորս հազար դրամ սուրճ").amount, 4000);
+  assert.equal(voice.parseExpense("Գրանցիր 4 հազար 500 դրամ բենզին").amount, 4500);
+  assert.equal(voice.parseExpense("Ավելացրու 2500 դրամով սնունդ").title, "սնունդ");
   assert.equal(voice.parseExpense("Գրանցիր բենզին").error, "amount");
 });
 
@@ -24,4 +26,5 @@ test("voice tasks understand relative dates and times", () => {
   assert.equal(task.date, "2026-11-10");
   assert.equal(task.time, "15:30");
   assert.equal(voice.parseTask("Հիշեցրու այսօր գնել հաց", now).time, "09:00");
+  assert.equal(voice.parseTask("Հիշեցրու վաղը ժամը երեքին գնել դեղ", now).time, "03:00");
 });

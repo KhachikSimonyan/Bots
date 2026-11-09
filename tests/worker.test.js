@@ -60,6 +60,8 @@ test("auth, account isolation, voice transcription, atomic revision and durable 
       assert.equal(model, "@cf/openai/whisper-large-v3-turbo");
       assert.equal(input.language, "hy");
       assert.equal(input.task, "transcribe");
+      assert.equal(input.beam_size, 8);
+      assert.match(input.initial_prompt, /Հայերեն ծախսի/);
       assert.ok(input.audio.length > 0);
       return { text: "Գրանցիր 4000 դրամ բենզին" };
     } },
@@ -70,6 +72,8 @@ test("auth, account isolation, voice transcription, atomic revision and durable 
   });
   assert.equal((await send("/api/state", {method:"OPTIONS",headers:{Origin:"https://bad.example"}})).status,403);
   assert.equal((await send("/api/state", {method:"OPTIONS",headers:{Origin:origin}})).status,204);
+  const preflight = await send("/api/state", {method:"OPTIONS",headers:{Origin:origin}});
+  assert.match(preflight.headers.get("Access-Control-Allow-Headers"), /X-Khnayik-Voice-Kind/);
   assert.equal((await session(123,301)).status,401);
   const {token} = await (await session(123)).json();
   const headers = {Authorization:"Bearer "+token};
