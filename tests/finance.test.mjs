@@ -90,6 +90,7 @@ test("fixed salary repeats while variable salary requires a monthly confirmation
 
 test("first-use guide reflects the three essential setup steps", () => {
   const { run } = preview();
+  assert.equal(run("els.homeScreenCard.hidden"), true);
   run("renderSetupGuide()");
   assert.equal(run("els.setupGuide.hidden"), false);
   assert.equal(run("els.setupProgress.textContent"), "0/3 քայլ պատրաստ է");

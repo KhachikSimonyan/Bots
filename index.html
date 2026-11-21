@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/styles.css?v=20261121-3" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261121-4" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -139,8 +139,8 @@
         <div class="accordion-panel" id="addExpensePanel">
         <form class="expense-form" id="expenseForm">
           <div class="voice-entry">
-            <button class="voice-button" id="expenseVoiceBtn" type="button" aria-pressed="false">🎙️ Ձայնով լրացնել</button>
-            <small id="expenseVoiceStatus" role="status">Օրինակ՝ «Գրանցիր 4,000 դրամ բենզին»</small>
+            <button class="voice-button" id="expenseVoiceBtn" type="button" aria-pressed="false">Ձայնով լրացնել</button>
+            <small id="expenseVoiceStatus" role="status">Ասեք՝ «4000 դրամ բենզին»</small>
           </div>
           <label class="form-field">Անվանում<input id="expenseTitle" placeholder="օր. սուրճ, մթերք" required /></label>
           <div class="two-col">
@@ -241,26 +241,22 @@
         </section>
 
         <section class="card plan-card">
-          <div class="section-head"><div><h2>Խելացի վերլուծություն</h2><p>Ամիսների համեմատություն և սահմանաչափերի ազդանշաններ</p></div></div>
+          <div class="section-head"><div><h2>Խելացի վերլուծություն</h2><p>Ամսվա գլխավոր ազդանշանները</p></div></div>
           <div id="insightsList" class="insight-list"></div>
         </section>
 
         <section class="card plan-card">
-          <div class="section-head"><div><h2>Ֆինանսական օրացույց</h2><p>Առաջիկա 35 օրվա մուտքեր, վճարումներ և կանխատեսվող մնացորդ</p></div></div>
+          <div class="section-head"><div><h2>Ֆինանսական օրացույց</h2><p>Առաջիկա 35 օրվա կանխատեսումը</p></div></div>
           <div id="cashflowList" class="cashflow-list"></div>
         </section>
       </section>
 
       <section class="app-view" id="monthsView" role="tabpanel" aria-labelledby="monthsTab">
-        <section class="card accordion-card months-card" id="monthsCard">
-          <button class="section-toggle" data-accordion="months" type="button" aria-expanded="true">
-            <span class="section-toggle-copy">
-              <strong>Բոլոր ամիսները</strong>
-              <small>Ընտրեք ամիսը և տեսեք ծախսերը կամ գործերը</small>
-            </span>
-            <span class="section-toggle-meta">Փակել</span>
-          </button>
-          <div class="accordion-panel" id="monthsPanel">
+        <section class="card months-card" id="monthsCard">
+          <div class="section-head">
+            <div><h2>Ամսվա պատմություն</h2><p>Ընտրեք ամիսը և տվյալների տեսակը</p></div>
+          </div>
+          <div class="months-panel" id="monthsPanel">
           <div class="history-total"><span>Ընդհանուր գրանցված ելքեր</span><strong class="total-pill" id="allMonthsTotal">֏0</strong></div>
           <select id="monthSelect" class="wide-select" aria-label="Ընտրել ամիսը"></select>
           <div class="sub-switch" role="tablist" aria-label="Ամսվա տվյալներ">
@@ -395,7 +391,7 @@
       </section>
 
       <section class="app-view" id="settingsView" aria-label="Կարգավորումներ">
-        <section class="card install-card">
+        <section class="card install-card" id="homeScreenCard">
           <div class="section-head">
             <div>
               <h2>Խնայիկը հեռախոսում</h2>
@@ -408,11 +404,10 @@
 
         <section class="card backup-card accordion-card">
           <button class="section-toggle" data-accordion="appearanceSettings" type="button" aria-expanded="false">
-            <span class="section-toggle-copy"><strong>Ֆոնային նկար</strong><small>Գույն կամ ձեր նկարը</small></span>
+            <span class="section-toggle-copy"><strong>Ֆոնային նկար</strong><small>Ընտրեք ձեր նկարը</small></span>
             <span class="section-toggle-meta">Բացել</span>
           </button>
           <div class="accordion-panel is-hidden" id="appearanceSettingsPanel">
-          <div class="preset-grid" id="backgroundPresets"></div>
           <div class="backup-grid">
             <label class="restore-control">
               <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp" />
@@ -420,7 +415,7 @@
             </label>
             <button class="secondary-button" id="removeBackgroundBtn" type="button">Հեռացնել ֆոնը</button>
           </div>
-          <p class="backup-note" id="backgroundNote">Լավ է ընտրել մինչև 1MB չափի նկար, որ cloud պահպանումը արագ մնա։</p>
+          <p class="backup-note" id="backgroundNote">PNG, JPG կամ WebP՝ մինչև 1MB։</p>
           </div>
         </section>
 
@@ -428,29 +423,29 @@
           <div class="section-head">
             <div>
               <h2>Excel ֆայլ</h2>
-              <p>Ծախսերը, գործերը և ամսական ամփոփումը պահեք Excel-ով</p>
+              <p>Ներբեռնեք տվյալները Excel կամ CSV ձևաչափով</p>
             </div>
           </div>
           <div class="backup-grid">
             <button class="primary-button" id="excelExportBtn" type="button">Պահել Excel ֆայլ</button>
             <button class="secondary-button" id="csvExportBtn" type="button">Արտահանել ծախսերը CSV-ով</button>
           </div>
-          <p class="backup-note" id="excelNote">Ֆայլը բացվում է Excel-ում և ունի առանձին աղյուսակներ։</p>
+          <p class="backup-note" id="excelNote" role="status" hidden></p>
         </section>
 
         <section class="card backup-card">
-          <div class="section-head"><div><h2>Բանկային քաղվածք</h2><p>Ներմուծեք CSV կամ TSV ֆայլը․ կրկնվող գործարքները չեն ավելացվի</p></div></div>
+          <div class="section-head"><div><h2>Բանկային քաղվածք</h2><p>Ներմուծեք CSV կամ TSV․ կրկնվողները չեն ավելացվի</p></div></div>
           <label class="restore-control">
             <input id="bankImportInput" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" />
             <span>Ընտրել բանկային քաղվածքը</span>
           </label>
           <div id="importPreview" class="import-preview"></div>
           <button class="primary-button" id="confirmImportBtn" type="button" hidden>Գրանցել ընտրված գործարքները</button>
-          <p class="backup-note" id="importNote">Ակնկալվող սյունակներ՝ ամսաթիվ, նկարագրություն և գումար կամ մուտք/ելք։</p>
+          <p class="backup-note" id="importNote">Պետք են ամսաթիվ, նկարագրություն և գումար սյունակները։</p>
         </section>
 
         <section class="card backup-card">
-          <div class="section-head"><div><h2>Պահուստավորում</h2><p>Պահեք կամ ամբողջությամբ վերականգնեք Խնայիկի տվյալները</p></div></div>
+          <div class="section-head"><div><h2>Պահուստավորում</h2><p>Ներբեռնեք կամ վերականգնեք բոլոր տվյալները</p></div></div>
           <div class="backup-grid">
             <button class="primary-button" id="backupExportBtn" type="button">Ներբեռնել ամբողջ պահուստը</button>
             <label class="restore-control">
@@ -458,16 +453,14 @@
               <span>Վերականգնել պահուստից</span>
             </label>
           </div>
-          <p class="backup-note" id="backupNote">Վերականգնումից առաջ ներկայիս տվյալները փոխարինելու հաստատում կպահանջվի։</p>
+          <p class="backup-note" id="backupNote">Վերականգնումը կփոխարինի ներկայիս տվյալները՝ միայն հաստատումից հետո։</p>
         </section>
       </section>
 
       <section class="app-view" id="tasksView" role="tabpanel" aria-labelledby="tasksTab">
         <section class="notebook-card" aria-labelledby="notebookTitle">
-          <div class="notebook-binding" aria-hidden="true"></div>
           <div class="notebook-head">
             <div>
-              <span class="notebook-kicker">Օրվա էջ</span>
               <h2 id="notebookTitle">Այսօրվա գործերը</h2>
               <small id="notebookProgress">0-ից 0 կատարված</small>
             </div>
@@ -507,7 +500,7 @@
         </label>
         <section class="voice-card">
           <button class="voice-button" id="taskVoiceBtn" type="button" aria-pressed="false">Ձայնով ավելացնել գործ</button>
-          <small id="taskVoiceStatus" role="status">Օրինակ՝ «Ավելացրու գործ՝ վաղը ժամը 15:30 զանգել բժշկին»</small>
+          <small id="taskVoiceStatus" role="status">Ասեք՝ «Վաղը 15:30 զանգել բժշկին»</small>
         </section>
         <section class="card accordion-card">
           <button class="section-toggle" data-accordion="recurringTasks" type="button" aria-expanded="true">
@@ -647,7 +640,7 @@
         </div>
         <div class="expense-side">
           <b></b>
-          <button type="button" aria-label="Ջնջել ծախսը">×</button>
+          <button type="button" aria-label="Ջնջել ծախսը">Ջնջել</button>
         </div>
       </article>
     </template>
@@ -660,7 +653,7 @@
 <script src="./src/finance-tools.js?v=20261108-1"></script>
 <script src="./src/voice-input.js?v=20261109-2"></script>
 <script src="./src/sync.js?v=20261108-1"></script>
-<script src="./src/app.js?v=20261121-3"></script>
+<script src="./src/app.js?v=20261121-4"></script>
 
   </body>
 </html>

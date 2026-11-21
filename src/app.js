@@ -41,7 +41,6 @@ const accordionState = {
   fixed: false,
   addExpense: true,
   recentExpenses: false,
-  months: true,
   recurringTasks: false,
   taskList: false,
   planIncome: false,
@@ -110,6 +109,7 @@ const els = {
   menuBtn: document.getElementById("menuBtn"),
   appSwitch: document.querySelector(".app-switch"),
   addHomeScreenBtn: document.getElementById("addHomeScreenBtn"),
+  homeScreenCard: document.getElementById("homeScreenCard"),
   homeScreenNote: document.getElementById("homeScreenNote"),
   expenseTemplate: document.getElementById("expenseTemplate"),
   todayTaskCount: document.getElementById("todayTaskCount"),
@@ -153,7 +153,6 @@ const els = {
   taskFilters: document.getElementById("taskFilters"),
   taskVoiceBtn: document.getElementById("taskVoiceBtn"),
   taskVoiceStatus: document.getElementById("taskVoiceStatus"),
-  backgroundPresets: document.getElementById("backgroundPresets"),
   excelExportBtn: document.getElementById("excelExportBtn"),
   csvExportBtn: document.getElementById("csvExportBtn"),
   excelNote: document.getElementById("excelNote"),
@@ -234,36 +233,12 @@ const categoryColors = {
 const armenianMonths = ["հունվար", "փետրվար", "մարտ", "ապրիլ", "մայիս", "հունիս", "հուլիս", "օգոստոս", "սեպտեմբեր", "հոկտեմբեր", "նոյեմբեր", "դեկտեմբեր"];
 const armenianShortMonths = ["հնվ", "փտր", "մրտ", "ապր", "մյս", "հնս", "հլս", "օգս", "սեպ", "հոկ", "նոյ", "դեկ"];
 
-const defaultBackgrounds = [
-  {
-    id: "mountain",
-    title: "Լեռներ",
-    image: svgBackground("#8fc9a7", "#436a90", "#f7f3ea", "M0 142 L70 64 L130 132 L188 46 L320 150 L320 200 L0 200 Z"),
-  },
-  {
-    id: "sunset",
-    title: "Մայրամուտ",
-    image: svgBackground("#d86145", "#c9912b", "#fffaf0", "M0 150 C70 96 108 176 172 124 C228 78 260 114 320 82 L320 200 L0 200 Z"),
-  },
-  {
-    id: "forest",
-    title: "Կանաչ",
-    image: svgBackground("#327a5f", "#8fc9a7", "#f3ead8", "M0 150 L36 92 L74 150 L110 82 L154 150 L198 74 L246 150 L286 96 L320 150 L320 200 L0 200 Z"),
-  },
-  {
-    id: "calm",
-    title: "Հանգիստ",
-    image: svgBackground("#436a90", "#7bb7d6", "#fffaf0", "M0 136 C52 120 92 122 138 138 C190 156 236 150 320 112 L320 200 L0 200 Z"),
-  },
-];
-
 initTelegram();
 initTimePickers();
 if (!CLOUD_MODE) {
   ensureCurrentMonthBudget();
   if (rollOverdueNotebookTasks()) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
-renderBackgroundPresets();
 applyBackgroundImage();
 bindEvents();
 render();
@@ -586,9 +561,9 @@ function initVoiceInput() {
   }
   if (!SpeechRecognition) {
     for (const [button, status] of [[els.expenseVoiceBtn, els.expenseVoiceStatus], [els.taskVoiceBtn, els.taskVoiceStatus]]) {
-      button.disabled = true;
-      button.classList.add("is-unsupported");
-      status.textContent = "Այս դիտարկիչում օգտագործեք հեռախոսի ստեղնաշարի 🎙️ կոճակը։";
+      button.hidden = true;
+      status.hidden = true;
+      status.textContent = "";
     }
     return;
   }
@@ -596,7 +571,6 @@ function initVoiceInput() {
   els.expenseVoiceBtn.addEventListener("click", () => startVoiceRecognition("expense", SpeechRecognition));
   els.taskVoiceBtn.addEventListener("click", () => startVoiceRecognition("task", SpeechRecognition));
 }
-
 async function toggleServerRecording(kind) {
   if (activeRecording) {
     if (activeRecording.recorder?.state === "recording") activeRecording.recorder.stop();
@@ -692,7 +666,7 @@ function resetVoiceButton(kind) {
   button.disabled = false;
   button.classList.remove("is-listening");
   button.setAttribute("aria-pressed", "false");
-  button.textContent = kind === "expense" ? "🎙️ Ձայնով լրացնել" : "🎙️ Ավելացնել գործ ձայնով";
+  button.textContent = kind === "expense" ? "Ձայնով լրացնել" : "Ձայնով ավելացնել գործ";
 }
 
 function startVoiceRecognition(kind, SpeechRecognition) {
@@ -1533,7 +1507,7 @@ function renderFixedExpenses() {
     edit.addEventListener("click", () => editFixedExpense(item.id));
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.textContent = "×";
+    remove.textContent = "Ջնջել";
     remove.setAttribute("aria-label", `Ջնջել ֆիքսված ծախսը՝ ${item.title}`);
     remove.addEventListener("click", () => deleteRecord("fixedExpenses", item.id));
     actions.append(paidButton, edit, remove);
@@ -1724,10 +1698,10 @@ function renderMonthExpenses(monthKey) {
     ? "Չի մուտքագրվել" : formatMoney(budget.salary);
   addMonthTotalRow(salaryLabel, salaryValue, salaryValue === "Չի մուտքագրվել" ? "neutral" : "positive");
   if (extraIncome) addMonthTotalRow("Այլ եկամուտներ", formatMoney(extraIncome), "positive");
-  addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal), "negative");
+  addMonthTotalRow("Ֆիքսված ծախսեր", formatMoney(fixedTotal), fixedTotal ? "negative" : "neutral");
   if (budget.fixedExpenses.length) addMonthTotalRow("Վճարված ֆիքսվածներ", `${fixedPaid}/${budget.fixedExpenses.length}`, "neutral");
-  addMonthTotalRow("Առօրյա ծախսեր", formatMoney(spent), "negative");
-  addMonthTotalRow("Պարտքերի վճարումներ", formatMoney(debtPaid), "negative");
+  addMonthTotalRow("Առօրյա ծախսեր", formatMoney(spent), spent ? "negative" : "neutral");
+  addMonthTotalRow("Պարտքերի վճարումներ", formatMoney(debtPaid), debtPaid ? "negative" : "neutral");
   if (savings) addMonthTotalRow("Պլանավորված խնայողություն", formatMoney(savings), "negative");
   const freeBalance = budget.salary + extraIncome - fixedTotal - savings - spent - debtPaid;
   addMonthTotalRow("Ազատ մնացորդ", formatMoney(freeBalance), freeBalance >= 0 ? "positive" : "negative");
@@ -1940,7 +1914,7 @@ function renderTasks() {
     row.innerHTML = `
       <label class="task-check"><input type="checkbox" /><span></span></label>
       <div class="task-info"><strong></strong><small></small></div>
-      <div class="task-actions"><button class="reminder-chip" type="button"></button><button class="reminder-chip snooze-task" type="button">Վաղը</button><button class="delete-task" type="button">×</button></div>
+      <div class="task-actions"><button class="reminder-chip" type="button"></button><button class="reminder-chip snooze-task" type="button">Վաղը</button><button class="delete-task" type="button">Ջնջել</button></div>
     `;
 
     const checkbox = row.querySelector(".task-check input");
@@ -2011,9 +1985,11 @@ function renderSyncStatus(text) {
 }
 
 function renderHomeScreenInstall() {
-  if (!els.addHomeScreenBtn || !els.homeScreenNote) return;
+  if (!els.homeScreenCard || !els.addHomeScreenBtn || !els.homeScreenNote) return;
   const supported = Boolean(tg?.isVersionAtLeast?.("8.0") && typeof tg.addToHomeScreen === "function");
   const added = homeScreenStatus === "added";
+  els.homeScreenCard.hidden = !supported && !added;
+  if (els.homeScreenCard.hidden) return;
   els.addHomeScreenBtn.disabled = added || !supported;
   els.addHomeScreenBtn.classList.toggle("is-complete", added);
   els.addHomeScreenBtn.textContent = added
@@ -2300,34 +2276,6 @@ function getBudgetForMonth(monthKey) {
   };
 }
 
-function renderBackgroundPresets() {
-  els.backgroundPresets.innerHTML = "";
-  defaultBackgrounds.forEach((preset) => {
-    const button = document.createElement("button");
-    button.className = "preset-card";
-    button.type = "button";
-    button.dataset.backgroundId = preset.id;
-    button.style.backgroundImage = `url("${preset.image}")`;
-    button.innerHTML = `<span></span>`;
-    button.querySelector("span").textContent = preset.title;
-    button.addEventListener("click", () => setDefaultBackground(preset));
-    els.backgroundPresets.append(button);
-  });
-}
-
-function setDefaultBackground(preset) {
-  state.appearance = {
-    ...state.appearance,
-    backgroundImage: preset.image,
-    backgroundName: preset.title,
-    backgroundPreset: preset.id,
-  };
-  saveState();
-  applyBackgroundImage();
-  renderBackgroundPresetsActive();
-  els.backgroundNote.textContent = `Ֆոնը դրված է՝ ${preset.title}`;
-}
-
 function setBackgroundImage(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -2362,13 +2310,14 @@ function removeBackgroundImage() {
   state.appearance = { ...state.appearance, backgroundImage: "", backgroundName: "", backgroundPreset: "" };
   saveState();
   applyBackgroundImage();
-  renderBackgroundPresetsActive();
   els.backgroundNote.textContent = "Ֆոնային նկարը հեռացված է";
 }
 
 function applyBackgroundImage() {
-  const image = state.appearance?.backgroundImage;
+  const legacyPreset = Boolean(state.appearance?.backgroundPreset);
+  const image = legacyPreset ? "" : state.appearance?.backgroundImage;
   document.body.classList.toggle("has-custom-bg", Boolean(image));
+  if (els.removeBackgroundBtn) els.removeBackgroundBtn.hidden = !image;
   if (image) {
     document.documentElement.style.setProperty("--custom-bg-image", `url("${image}")`);
     if (els.backgroundNote && state.appearance?.backgroundName) {
@@ -2377,14 +2326,6 @@ function applyBackgroundImage() {
   } else {
     document.documentElement.style.removeProperty("--custom-bg-image");
   }
-  renderBackgroundPresetsActive();
-}
-
-function renderBackgroundPresetsActive() {
-  if (!els.backgroundPresets) return;
-  els.backgroundPresets.querySelectorAll(".preset-card").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.backgroundId === state.appearance?.backgroundPreset);
-  });
 }
 
 function expenseRows() {
@@ -2404,6 +2345,7 @@ function exportCsv() {
     return `${local}${offset < 0 ? "-" : "+"}${hh}:${mm}`;
   }));
   downloadBlob(KhnayikExport.csv(rows), `khnayik-expenses-${getDateKey(new Date())}.csv`);
+  els.excelNote.hidden = false;
   els.excelNote.textContent = "Ծախսերի CSV ֆայլը պատրաստ է։";
 }
 
@@ -2459,6 +2401,7 @@ function exportExcel() {
     { name: "Ամիսներ", rows: [["Ամիս", "Աշխատավարձ", "Այլ եկամուտ", "Ֆիքսված", "Խնայողություն", "Ծախս", "Պարտքի վճարում", "Մնացորդ"], ...months] },
   ];
   downloadBlob(KhnayikExport.workbook(tables), `khnayik-${getDateKey(new Date())}.xlsx`);
+  els.excelNote.hidden = false;
   els.excelNote.textContent = "Excel ֆայլը պատրաստ է։";
 }
 
@@ -3047,23 +2990,4 @@ function downloadBlob(blob, filename) {
   link.download = filename;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 30000);
-}
-
-function svgBackground(a, b, c, shape) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
-      <defs>
-        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stop-color="${a}"/>
-          <stop offset="0.58" stop-color="${b}"/>
-          <stop offset="1" stop-color="${c}"/>
-        </linearGradient>
-      </defs>
-      <rect width="320" height="200" fill="url(#g)"/>
-      <circle cx="250" cy="48" r="34" fill="${c}" opacity="0.72"/>
-      <path d="${shape}" fill="rgba(255,255,255,0.38)"/>
-      <path d="${shape}" transform="translate(0 20)" fill="rgba(32,35,31,0.18)"/>
-    </svg>
-  `;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }

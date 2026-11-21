@@ -263,7 +263,7 @@ h2 {
   padding: 20px;
   border-radius: 24px;
   color: white;
-  background: linear-gradient(135deg, #a94f36, #64383d);
+  background: linear-gradient(135deg, #274e62, #327a5f 72%, #436a90 135%);
   box-shadow: var(--shadow);
 }
 
@@ -621,7 +621,7 @@ h2 {
   padding: 14px;
   border: 1px solid rgba(228, 216, 195, 0.8);
   border-radius: 18px;
-  background: rgba(255, 250, 240, 0.86);
+  background: rgba(255, 250, 240, 0.94);
   box-shadow: 0 12px 32px rgba(54, 45, 28, 0.08);
 }
 
@@ -904,10 +904,10 @@ select:focus {
 .primary-button {
   min-height: 46px;
   border-radius: 14px;
-  background: var(--coral);
+  background: var(--green);
   color: white;
   font-weight: 800;
-  box-shadow: 0 12px 24px rgba(216, 97, 69, 0.22);
+  box-shadow: 0 12px 24px rgba(50, 122, 95, 0.2);
 }
 
 .primary-button:disabled {
@@ -924,8 +924,8 @@ select:focus {
   align-self: start;
   padding: 8px 10px;
   border-radius: 12px;
-  background: #f4d7cd;
-  color: #a33d27;
+  background: rgba(50, 122, 95, 0.1);
+  color: var(--green);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1010,17 +1010,6 @@ select:focus {
   font-weight: 800;
 }
 
-.section-toggle-meta::after {
-  content: "⌄";
-  font-size: 16px;
-  line-height: 1;
-  transition: transform 160ms ease;
-}
-
-.section-toggle.is-open .section-toggle-meta::after {
-  transform: rotate(180deg);
-}
-
 .task-hero {
   align-items: center;
   justify-content: space-between;
@@ -1048,23 +1037,13 @@ select:focus {
   position: relative;
   display: grid;
   gap: 14px;
-  margin-top: 14px;
-  padding: 20px 16px 18px 30px;
+  margin-top: 12px;
+  padding: 16px;
   overflow: hidden;
-  border: 1px solid #dfd2b8;
-  border-radius: 8px 18px 18px 8px;
-  background:
-    linear-gradient(90deg, transparent 0 42px, rgba(208, 91, 73, .2) 42px 44px, transparent 44px),
-    repeating-linear-gradient(#fffdf5 0 31px, #d8e3e5 32px, #fffdf5 33px);
-  box-shadow: 0 14px 30px rgba(54, 45, 28, .12);
-}
-
-.notebook-binding {
-  position: absolute;
-  inset: 0 auto 0 8px;
-  width: 12px;
-  background: radial-gradient(circle, #223f54 0 2px, transparent 3px) 50% 3px / 8px 18px repeat-y;
-  opacity: .5;
+  border: 1px solid rgba(228, 216, 195, 0.8);
+  border-radius: 18px;
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 12px 32px rgba(54, 45, 28, 0.08);
 }
 
 .notebook-head,
@@ -1075,7 +1054,6 @@ select:focus {
   gap: 12px;
 }
 
-.notebook-kicker,
 .notebook-head small,
 .notebook-review-setting small {
   color: var(--muted);
@@ -1145,7 +1123,7 @@ select:focus {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-family: "Segoe Print", "Comic Sans MS", cursive;
+  font-family: inherit;
   font-size: 15px;
   line-height: 1.35;
 }
@@ -1166,7 +1144,7 @@ select:focus {
 }
 .notebook-row:focus-within .notebook-delete,
 .notebook-delete:focus-visible { opacity: 1; }
-.notebook-empty { padding: 12px 4px; color: var(--muted); font-family: "Segoe Print", "Comic Sans MS", cursive; text-align: center; }
+.notebook-empty { padding: 12px 4px; color: var(--muted); text-align: center; }
 .notebook-review-setting {
   display: grid;
   gap: 8px;
@@ -1400,12 +1378,14 @@ select:focus {
 }
 
 .delete-task {
-  width: 44px;
-  height: 44px;
+  min-width: 58px;
+  min-height: 44px;
+  padding: 0 9px;
   border-radius: 10px;
   background: #f4d7cd;
   color: #a33d27;
-  font-size: 20px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .expense-item {
@@ -1457,12 +1437,14 @@ select:focus {
 }
 
 .expense-side button {
-  width: 44px;
+  min-width: 58px;
   height: 44px;
+  padding: 0 9px;
   border-radius: 10px;
   background: var(--soft);
   color: var(--muted);
-  font-size: 20px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .total-pill {
@@ -1485,9 +1467,7 @@ select:focus {
   font-weight: 700;
 }
 
-.months-card.is-hidden {
-  display: none;
-}
+.months-panel { display: grid; gap: 12px; }
 
 .month-item {
   padding: 12px;
@@ -1508,7 +1488,6 @@ select:focus {
 
 .month-line strong {
   font-size: 14px;
-  text-transform: capitalize;
 }
 
 .month-line span {
@@ -1581,47 +1560,6 @@ select:focus {
 .backup-grid {
   display: grid;
   gap: 10px;
-}
-
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.preset-card {
-  position: relative;
-  min-height: 86px;
-  overflow: hidden;
-  border: 2px solid transparent;
-  border-radius: 16px;
-  background-position: center;
-  background-size: cover;
-  cursor: pointer;
-}
-
-.preset-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent, rgba(32, 35, 31, 0.46));
-}
-
-.preset-card span {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 9px;
-  z-index: 1;
-  color: white;
-  font-size: 12px;
-  font-weight: 800;
-  text-align: left;
-}
-
-.preset-card.is-active {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(50, 122, 95, 0.14);
 }
 
 .restore-control {
@@ -1707,7 +1645,6 @@ select:focus {
   .notebook-head { align-items: flex-start; flex-direction: column; }
   .notebook-date-nav { width: 100%; justify-content: space-between; }
   .notebook-date-nav button:nth-child(2) { flex: 1; }
-  .notebook-card { padding-left: 24px; }
   .notebook-review-setting .toggle-row { align-items: flex-start; }
   .task-item { display: grid; grid-template-columns: auto minmax(0, 1fr); }
   .task-actions { grid-column: 1 / -1; display: flex; justify-content: end; flex-wrap: wrap; }
