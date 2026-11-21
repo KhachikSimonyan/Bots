@@ -1,4 +1,5 @@
 import "../src/reminder-time.js";
+import { readState, stateWriteStatements } from "./state-store.js";
 
 const HOUR = 3600000;
 const CATCH_UP = 24 * HOUR;
@@ -43,6 +44,15 @@ function scheduleSpecs(state, now) {
     };
     const occurrence = KhnayikReminderTime.next(spec, "fixed", now - CATCH_UP);
     if (occurrence) schedules.push({ key: "fixed-" + item.id, spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });
+  }
+  if (state.appearance?.dailyReviewEnabled === true && /^([01]\d|2[0-3]):[0-5]\d$/.test(state.appearance.dailyReviewTime || "")) {
+    const spec = {
+      type: "daily-review", id: "notebook", title: "Օրվա գործերի ամփոփում", reminder: true,
+      time: state.appearance.dailyReviewTime,
+      timeZone: state.appearance.dailyReviewTimeZone || "Asia/Yerevan",
+    };
+    const occurrence = KhnayikReminderTime.next(spec, "daily-review", now);
+    if (occurrence) schedules.push({ key: "daily-review", spec: JSON.stringify(spec), at: occurrence.at, occurrence: occurrence.key });
   }
   return schedules;
 }
@@ -123,10 +133,11 @@ async function deliver(env, row, lease, now) {
   }
   let delay = 60000;
   let delivered = false;
+  const dailyReview = spec.type === "daily-review" ? await dailyReviewSnapshot(env, row.user_id, row.occurrence) : null;
   try {
     const response = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: row.user_id, text: "Հիշեցում՝ " + spec.title }),
+      body: JSON.stringify({ chat_id: row.user_id, text: dailyReview?.text || "Հիշեցում՝ " + spec.title }),
       signal: AbortSignal.timeout(10000),
     });
     const result = await response.json();
@@ -135,6 +146,7 @@ async function deliver(env, row, lease, now) {
     else if (response.status === 403) delay = HOUR;
   } catch { /* Temporary network failure or unreadable response. Keep the occurrence. */ }
   if (delivered) {
+    if (dailyReview) await rolloverDailyNotebook(env, row.user_id, dailyReview.day);
     await db.batch([db.prepare("INSERT OR IGNORE INTO reminder_sent(user_id,occurrence) VALUES(?,?)")
       .bind(row.user_id, row.occurrence), next]);
   } else {
@@ -142,6 +154,63 @@ async function deliver(env, row, lease, now) {
       WHERE user_id=? AND task_key=? AND lease=? AND occurrence=?`)
       .bind(now + delay, row.user_id, row.task_key, lease, row.occurrence).run();
   }
+}
+
+function shiftDay(day, count = 1) {
+  return new Date(Date.parse(day + "T00:00:00Z") + count * 86400000).toISOString().slice(0, 10);
+}
+
+function recurringOnDay(task, day) {
+  const created = String(task?.createdAt || "").slice(0, 10);
+  return Array.isArray(task?.days) && (!created || created <= day)
+    && task.days.includes(new Date(day + "T00:00:00Z").getUTCDay());
+}
+
+async function dailyReviewSnapshot(env, userId, occurrence) {
+  const day = String(occurrence).match(/(\d{4}-\d{2}-\d{2})$/)?.[1];
+  if (!day) return null;
+  const { state } = await readState(env, String(userId));
+  const scheduled = (state.scheduledTasks || []).filter((task) => task.date === day);
+  const recurring = (state.recurringTasks || []).filter((task) => recurringOnDay(task, day));
+  const rows = [
+    ...scheduled.map((task) => ({ title: task.title, done: task.done === true })),
+    ...recurring.map((task) => ({ title: task.title, done: (task.doneDates || []).includes(day) })),
+  ];
+  const done = rows.filter((task) => task.done).length;
+  const pending = rows.filter((task) => !task.done);
+  const scheduledPending = scheduled.filter((task) => task.done !== true).length;
+  const lines = rows.slice(0, 20).map((task) => `${task.done ? "✅" : "▫️"} ${task.title}`);
+  let text = `📒 Օրվա ամփոփում\nԿատարված՝ ${done}/${rows.length}`;
+  if (lines.length) text += "\n\n" + lines.join("\n");
+  else text += "\n\nԱյսօրվա բլոկնոտը դատարկ էր։";
+  if (rows.length > 20) text += `\n… և ևս ${rows.length - 20} գործ`;
+  if (scheduledPending) {
+    text += "\n\nՉկատարված մեկանգամյա գործերը տեղափոխվել են վաղվա էջ։";
+  } else if (pending.length) text += "\n\nՉկատարված կրկնվող գործերը չեն տեղափոխվում՝ դրանք կմնան իրենց օրացույցով։";
+  return { day, text };
+}
+
+async function rolloverDailyNotebook(env, userId, day) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const current = await readState(env, String(userId));
+    const pending = (current.state.scheduledTasks || []).filter((task) => task.date === day && task.done !== true);
+    if (!pending.length) return true;
+    const nextDay = shiftDay(day);
+    for (const task of pending) {
+      task.date = nextDay;
+      task.reminderAt = "";
+      task.carriedFrom = task.carriedFrom || day;
+      task.carryCount = Math.max(0, Number(task.carryCount) || 0) + 1;
+    }
+    const user = await env.DB.prepare("SELECT first_name FROM users WHERE tg_user_id=?").bind(String(userId)).first();
+    const revision = crypto.randomUUID();
+    const writes = stateWriteStatements(env, String(userId), user?.first_name || "", current.state, current.updatedAt, revision);
+    writes.push(...reminderWriteStatements(env, String(userId), current.state, revision));
+    const [saved] = await env.DB.batch(writes);
+    if (saved?.meta?.changes) return true;
+  }
+  console.error("Daily notebook rollover lost repeated state races", userId, day);
+  return false;
 }
 
 export async function sendDueReminders(env, now = Date.now()) {

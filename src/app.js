@@ -14,6 +14,7 @@ let editingExpenseId = "";
 let editingFixedId = "";
 let editingDebtId = "";
 let displayedDay = getDateKey(new Date());
+let selectedNotebookDate = getDateKey(new Date());
 let rolloverTimer;
 let isScheduledFormOpen = false;
 let activeTaskFilter = "all";
@@ -113,6 +114,17 @@ const els = {
   expenseTemplate: document.getElementById("expenseTemplate"),
   todayTaskCount: document.getElementById("todayTaskCount"),
   allowNotificationsBtn: document.getElementById("allowNotificationsBtn"),
+  notebookTaskForm: document.getElementById("notebookTaskForm"),
+  notebookTaskTitle: document.getElementById("notebookTaskTitle"),
+  notebookTaskList: document.getElementById("notebookTaskList"),
+  notebookTitle: document.getElementById("notebookTitle"),
+  notebookProgress: document.getElementById("notebookProgress"),
+  notebookPrevDay: document.getElementById("notebookPrevDay"),
+  notebookToday: document.getElementById("notebookToday"),
+  notebookNextDay: document.getElementById("notebookNextDay"),
+  dailyReviewEnabled: document.getElementById("dailyReviewEnabled"),
+  dailyReviewTime: document.getElementById("dailyReviewTime"),
+  dailyReviewNote: document.getElementById("dailyReviewNote"),
   recurringTaskForm: document.getElementById("recurringTaskForm"),
   recurringTitle: document.getElementById("recurringTitle"),
   recurringTimeHour: document.getElementById("recurringTimeHour"),
@@ -247,7 +259,10 @@ const defaultBackgrounds = [
 
 initTelegram();
 initTimePickers();
-if (!CLOUD_MODE) ensureCurrentMonthBudget();
+if (!CLOUD_MODE) {
+  ensureCurrentMonthBudget();
+  if (rollOverdueNotebookTasks()) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 renderBackgroundPresets();
 applyBackgroundImage();
 bindEvents();
@@ -505,6 +520,59 @@ function bindEvents() {
   els.selectAllDaysBtn.addEventListener("click", toggleAllDays);
   els.recurringTaskForm.addEventListener("submit", addRecurringTask);
   els.scheduledTaskForm.addEventListener("submit", addScheduledTask);
+  els.notebookTaskForm.addEventListener("submit", addNotebookTask);
+  els.notebookPrevDay.addEventListener("click", () => changeNotebookDay(-1));
+  els.notebookToday.addEventListener("click", () => { selectedNotebookDate = getDateKey(new Date()); renderNotebook(); });
+  els.notebookNextDay.addEventListener("click", () => changeNotebookDay(1));
+  els.dailyReviewEnabled.addEventListener("change", saveDailyReviewSettings);
+  els.dailyReviewTime.addEventListener("change", saveDailyReviewSettings);
+}
+
+function addNotebookTask(event) {
+  event.preventDefault();
+  const title = normalizeTitle(els.notebookTaskTitle.value);
+  if (!title) return;
+  const enabledDailyReviewNow = !state.appearance.dailyReviewConfigured;
+  state.scheduledTasks.unshift({
+    id: crypto.randomUUID(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    title,
+    date: selectedNotebookDate,
+    time: "09:00",
+    reminder: false,
+    leadMinutes: 0,
+    reminderAt: "",
+    done: false,
+    notebook: true,
+    createdAt: new Date().toISOString(),
+  });
+  if (!state.appearance.dailyReviewConfigured) {
+    state.appearance.dailyReviewEnabled = true;
+    state.appearance.dailyReviewConfigured = true;
+  }
+  els.notebookTaskForm.reset();
+  if (saveState() === false) return;
+  render();
+  if (enabledDailyReviewNow) maybeRequestNotifications(true);
+  els.notebookTaskTitle.focus();
+}
+
+function changeNotebookDay(offset) {
+  const date = new Date(`${selectedNotebookDate}T12:00:00`);
+  date.setDate(date.getDate() + offset);
+  selectedNotebookDate = getDateKey(date);
+  renderNotebook();
+}
+
+function saveDailyReviewSettings() {
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(els.dailyReviewTime.value) ? els.dailyReviewTime.value : "20:00";
+  state.appearance.dailyReviewEnabled = els.dailyReviewEnabled.checked;
+  state.appearance.dailyReviewConfigured = true;
+  state.appearance.dailyReviewTime = time;
+  state.appearance.dailyReviewTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Yerevan";
+  if (saveState() === false) return;
+  renderNotebook();
+  if (els.dailyReviewEnabled.checked) maybeRequestNotifications(true);
 }
 
 function initVoiceInput() {
@@ -823,6 +891,7 @@ function addScheduledTask(event) {
     leadMinutes: Number(els.scheduledLead.value),
     reminderAt: getCustomReminderAt(els.scheduledReminderDate.value, getSelectedTime("scheduledReminderTime")),
     done: false,
+    notebook: true,
     createdAt: new Date().toISOString(),
   });
   els.scheduledTaskForm.reset();
@@ -1587,9 +1656,24 @@ function refreshCalendar() {
       ensureCurrentMonthBudget();
       saveState();
     }
+    if (rollOverdueNotebookTasks()) saveState();
     render();
   }
   scheduleRollover();
+}
+
+function rollOverdueNotebookTasks() {
+  const today = getDateKey(new Date());
+  let changed = false;
+  for (const task of state.scheduledTasks) {
+    if (task.done || !task.date || task.date >= today) continue;
+    task.carriedFrom = task.carriedFrom || task.date;
+    task.carryCount = Math.max(0, Number(task.carryCount) || 0) + 1;
+    task.date = today;
+    task.reminderAt = "";
+    changed = true;
+  }
+  return changed;
 }
 
 function renderMonthlySummary() {
@@ -1720,7 +1804,59 @@ function addMonthTotalRow(label, value, tone = "neutral") {
   els.monthList.append(row);
 }
 
+function notebookTasksForDay(day) {
+  const date = new Date(`${day}T12:00:00`);
+  return [
+    ...state.scheduledTasks.filter((task) => task.date === day).map((task) => ({ ...task, type: "scheduled" })),
+    ...state.recurringTasks
+      .filter((task) => day >= getDateKey(new Date(task.createdAt || Date.now())) && task.days.includes(date.getDay()))
+      .map((task) => ({ ...task, type: "recurring" })),
+  ].sort(compareTasks);
+}
+
+function renderNotebook() {
+  if (!els.notebookTaskList) return;
+  const today = getDateKey(new Date());
+  const tomorrowDate = new Date(`${today}T12:00:00`);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = getDateKey(tomorrowDate);
+  els.notebookTitle.textContent = selectedNotebookDate === today
+    ? "Այսօրվա գործերը" : selectedNotebookDate === tomorrow ? "Վաղվա գործերը" : formatTaskDate(selectedNotebookDate);
+  const items = notebookTasksForDay(selectedNotebookDate);
+  const completed = items.filter((task) => isTaskDone(task, selectedNotebookDate)).length;
+  els.notebookProgress.textContent = `${items.length}-ից ${completed} կատարված`;
+  els.notebookTaskList.innerHTML = "";
+  if (!items.length) {
+    els.notebookTaskList.innerHTML = `<div class="notebook-empty">Այս էջը դեռ դատարկ է</div>`;
+  } else {
+    items.forEach((task) => {
+      const row = document.createElement("article");
+      const done = isTaskDone(task, selectedNotebookDate);
+      row.className = `notebook-row${done ? " is-done" : ""}`;
+      row.innerHTML = `<input type="checkbox" /><div><strong></strong><small></small></div><button type="button" aria-label="Ջնջել">×</button>`;
+      const checkbox = row.querySelector("input");
+      checkbox.checked = done;
+      checkbox.setAttribute("aria-label", `Նշել կատարված՝ ${task.title}`);
+      checkbox.addEventListener("change", () => toggleTaskDone(task, checkbox.checked, selectedNotebookDate));
+      row.querySelector("strong").textContent = task.title;
+      row.querySelector("small").textContent = task.type === "recurring" ? "Կրկնվող" : task.notebook ? "Օրվա գրառում" : task.time;
+      row.querySelector("button").addEventListener("click", () => deleteTask(task));
+      els.notebookTaskList.append(row);
+    });
+  }
+  const reviewEnabled = state.appearance.dailyReviewEnabled === true;
+  const reviewTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(state.appearance.dailyReviewTime) ? state.appearance.dailyReviewTime : "20:00";
+  els.dailyReviewEnabled.checked = reviewEnabled;
+  els.dailyReviewTime.value = reviewTime;
+  els.dailyReviewTime.disabled = !reviewEnabled;
+  els.dailyReviewTime.closest?.(".notebook-review-setting")?.classList.toggle("is-disabled", !reviewEnabled);
+  els.dailyReviewNote.textContent = reviewEnabled
+    ? `Ամեն օր ${reviewTime}-ին Telegram-ը կամ ընտրված ալիքը կամփոփի օրը և չարվածները կտեղափոխի վաղվա էջ։`
+    : "Միացրեք՝ օրվա վերջում ամփոփում ստանալու համար։";
+}
+
 function renderTasks() {
+  renderNotebook();
   const todayItems = getTodayTasks();
   const allCount = state.recurringTasks.length + state.scheduledTasks.length;
   els.todayTaskCount.textContent = `${todayItems.length} գործ`;
@@ -1884,10 +2020,12 @@ async function syncFromCloud() {
       applyCloudView();
       isCloudReady = true;
       document.querySelectorAll(".app-view").forEach((view) => { view.inert = false; });
+      let initialStateChanged = rollOverdueNotebookTasks();
       if (!state.monthlyBudgets[getMonthKey(new Date())]) {
         ensureCurrentMonthBudget();
-        saveState();
+        initialStateChanged = true;
       }
+      if (initialStateChanged) saveState();
       render();
     } else if (data.state) {
       cloudBase = normalizeState(data.state);
@@ -2038,6 +2176,7 @@ function normalizeState(value) {
   }));
   const categoryBudgets = {};
   for (const category of KhnayikFinance.categories) categoryBudgets[category] = Math.max(0, Math.round(Number(value.categoryBudgets?.[category]) || 0));
+  const appearance = value.appearance && typeof value.appearance === "object" ? value.appearance : {};
   return {
     salary: Math.max(0, Number(value.salary || 0)),
     salaryMode,
@@ -2057,7 +2196,14 @@ function normalizeState(value) {
     categoryBudgets,
     monthlyBudgets: value.monthlyBudgets && typeof value.monthlyBudgets === "object" ? value.monthlyBudgets : {},
     notified: value.notified && typeof value.notified === "object" ? value.notified : {},
-    appearance: value.appearance && typeof value.appearance === "object" ? value.appearance : {},
+    appearance: {
+      ...appearance,
+      dailyReviewEnabled: appearance.dailyReviewEnabled === true,
+      dailyReviewConfigured: appearance.dailyReviewConfigured === true,
+      dailyReviewTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(appearance.dailyReviewTime) ? appearance.dailyReviewTime : "20:00",
+      dailyReviewTimeZone: typeof appearance.dailyReviewTimeZone === "string" && appearance.dailyReviewTimeZone
+        ? appearance.dailyReviewTimeZone : Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
   };
 }
 
@@ -2388,13 +2534,19 @@ function checkReminders() {
     paidMonths: item.paidMonths,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }));
-  for (const [type, tasks] of [["scheduled", state.scheduledTasks], ["recurring", state.recurringTasks], ["debt", debtReminders], ["fixed", fixedReminders]]) {
+  const dailyReviews = state.appearance.dailyReviewEnabled ? [{
+    id: "notebook", title: "Օրվա գործերի ամփոփում", reminder: true,
+    time: state.appearance.dailyReviewTime || "20:00",
+    timeZone: state.appearance.dailyReviewTimeZone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }] : [];
+  for (const [type, tasks] of [["scheduled", state.scheduledTasks], ["recurring", state.recurringTasks], ["debt", debtReminders], ["fixed", fixedReminders], ["daily-review", dailyReviews]]) {
     for (const task of tasks) {
       let occurrence = KhnayikReminderTime.next(task, type, from, defaultZone);
       while (occurrence && occurrence.at <= now) {
         if (!state.notified[occurrence.key]) {
-          const heading = type === "debt" ? "Պարտքի հիշեցում" : type === "fixed" ? "Ֆիքսված ծախսի հիշեցում" : "Գործի հիշեցում";
-          notifyTask(task.title, heading);
+          const heading = type === "debt" ? "Պարտքի հիշեցում" : type === "fixed" ? "Ֆիքսված ծախսի հիշեցում"
+            : type === "daily-review" ? "Օրվա ամփոփում" : "Գործի հիշեցում";
+          notifyTask(type === "daily-review" ? localDailyReview(occurrence.key) : task.title, heading);
           state.notified[occurrence.key] = true;
           changed = true;
         }
@@ -2405,15 +2557,32 @@ function checkReminders() {
   if (changed) saveState();
 }
 
-function toggleTaskDone(task, isDone) {
+function localDailyReview(occurrenceKey) {
+  const day = String(occurrenceKey).match(/(\d{4}-\d{2}-\d{2})$/)?.[1] || getDateKey(new Date());
+  const items = notebookTasksForDay(day);
+  const done = items.filter((task) => isTaskDone(task, day)).length;
+  const pending = state.scheduledTasks.filter((task) => task.date === day && !task.done);
+  const tomorrow = new Date(`${day}T12:00:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const nextDay = getDateKey(tomorrow);
+  for (const task of pending) {
+    task.carriedFrom = task.carriedFrom || day;
+    task.carryCount = Math.max(0, Number(task.carryCount) || 0) + 1;
+    task.date = nextDay;
+    task.reminderAt = "";
+  }
+  const list = items.slice(0, 8).map((task) => `${isTaskDone(task, day) ? "✅" : "▫️"} ${task.title}`).join("\n");
+  return `Կատարված՝ ${done}/${items.length}${list ? `\n${list}` : "\nԱյսօրվա բլոկնոտը դատարկ էր։"}${pending.length ? "\nՉարվածները տեղափոխվեցին վաղվա էջ։" : ""}`;
+}
+
+function toggleTaskDone(task, isDone, dayKey = getDateKey(new Date())) {
   if (task.type === "scheduled") {
     const item = state.scheduledTasks.find((entry) => entry.id === task.id);
     if (item) item.done = isDone;
   } else {
     const item = state.recurringTasks.find((entry) => entry.id === task.id);
-    const today = getDateKey(new Date());
-    if (item && isDone && !item.doneDates.includes(today)) item.doneDates.push(today);
-    if (item && !isDone) item.doneDates = item.doneDates.filter((date) => date !== today);
+    if (item && isDone && !item.doneDates.includes(dayKey)) item.doneDates.push(dayKey);
+    if (item && !isDone) item.doneDates = item.doneDates.filter((date) => date !== dayKey);
   }
   saveState();
   renderTasks();
@@ -2557,9 +2726,9 @@ function renderTaskFilterButtons() {
   });
 }
 
-function isTaskDone(task) {
+function isTaskDone(task, dayKey = getDateKey(new Date())) {
   if (task.type === "scheduled") return task.done;
-  return task.doneDates.includes(getDateKey(new Date()));
+  return task.doneDates.includes(dayKey);
 }
 
 function compareTasks(a, b) {

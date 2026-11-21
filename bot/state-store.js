@@ -68,6 +68,11 @@ export function validState(state) {
   if (!object(state.monthlyBudgets) || !object(state.appearance) || !object(state.notified)
     || !object(state.debtSettings) || !["smart", "avalanche", "snowball"].includes(state.debtSettings.strategy)
     || !amount(state.debtSettings.safetyReserve)) return false;
+  if ((state.appearance.dailyReviewEnabled != null && typeof state.appearance.dailyReviewEnabled !== "boolean")
+    || (state.appearance.dailyReviewConfigured != null && typeof state.appearance.dailyReviewConfigured !== "boolean")
+    || (state.appearance.dailyReviewTime != null && !time(state.appearance.dailyReviewTime))
+    || (state.appearance.dailyReviewTimeZone != null && (typeof state.appearance.dailyReviewTimeZone !== "string"
+      || state.appearance.dailyReviewTimeZone.length > 80))) return false;
   if (!Object.entries(state.monthlyBudgets).every(([key, budget]) => /^\d{4}-(0[1-9]|1[0-2])$/.test(key)
     && object(budget) && amount(budget.salary) && list(budget.fixedExpenses, fixed)
     && (budget.salaryMode == null || ["fixed", "variable"].includes(budget.salaryMode))

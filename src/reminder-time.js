@@ -60,6 +60,16 @@
       const lead = Math.max(0, Math.min(maxLead, Number(task.leadMinutes) || 0)) * MINUTE;
       const done = new Set(Array.isArray(task.doneDates) ? task.doneDates : []);
       const paidMonths = new Set(Array.isArray(task.paidMonths) ? task.paidMonths : []);
+      if (type === "daily-review") {
+        let day = dayKey(start, zone);
+        let at = instant(day, task.time || "20:00", zone);
+        if (!Number.isFinite(at)) return null;
+        if (at < start) {
+          day = shiftDay(day, 1);
+          at = instant(day, task.time || "20:00", zone);
+        }
+        return Number.isFinite(at) ? { at, key: `daily-review-${task.id}-${day}` } : null;
+      }
       if (type === "debt" || type === "fixed") {
         if (!Number.isInteger(Number(task.dueDay)) || Number(task.dueDay) < 1 || Number(task.dueDay) > 31) return null;
         const dueDay = Number(task.dueDay);

@@ -197,6 +197,19 @@ test("corrected Armenian voice commands fill expense fields without changing the
   assert.equal(run("els.expenseCategory.value"), "Տրանսպորտ");
 });
 
+test("daily notebook adds tasks, marks them done and rolls old unfinished tasks forward", () => {
+  const { run } = preview();
+  run("selectedNotebookDate='2026-11-22';els.notebookTaskTitle.value='Կարդալ գիրք';els.notebookTaskForm.events.submit({preventDefault(){}})");
+  assert.equal(run("state.scheduledTasks[0].title"), "Կարդալ գիրք");
+  assert.equal(run("state.scheduledTasks[0].date"), "2026-11-22");
+  assert.equal(run("state.scheduledTasks[0].notebook"), true);
+  assert.equal(run("state.appearance.dailyReviewEnabled"), true);
+  run("toggleTaskDone({...state.scheduledTasks[0],type:'scheduled'},true,'2026-11-22')");
+  assert.equal(run("state.scheduledTasks[0].done"), true);
+  run("state.scheduledTasks.unshift({id:'old',title:'Հին գործ',date:'2020-01-01',time:'09:00',done:false,reminder:false});rollOverdueNotebookTasks()");
+  assert.equal(run("state.scheduledTasks[0].date"), run("getDateKey(new Date())"));
+});
+
 test("recurring months count actual days and their saved completion", () => {
   const { run } = preview();
   run("state.recurringTasks = [{id:'r',title:'Wed',time:'09:00',createdAt:'2026-06-30T12:00:00',days:[3],doneDates:['2026-07-01']}]");

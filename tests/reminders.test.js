@@ -17,13 +17,14 @@ function fixture() {
         run: () => stmt.run(...params),
         all: () => ({ results: stmt.all(...params) }),
         first: () => stmt.get(...params),
+        execute: () => stmt.columns().length ? { results: stmt.all(...params) } : { meta: stmt.run(...params) },
       });
       return { ...bind(), bind };
     },
     async batch(stmts) {
       sql.exec("BEGIN");
       try {
-        const results = stmts.map(stmt => stmt.run());
+        const results = stmts.map(stmt => stmt.execute());
         sql.exec("COMMIT");
         return results;
       } catch (error) {
@@ -64,6 +65,32 @@ test("night-before lead, completed date, and DST-aware wall times", () => {
   assert.equal(fixedDue.at,tick);
   const nextAfterPaid = KhnayikReminderTime.next({...fixed,paidMonths:["2026-11"]},"fixed",tick);
   assert.equal(nextAfterPaid.key,"fixed-f-2026-12-06");
+  const review = {id:"notebook",title:"Review",reminder:true,time:"20:00",timeZone:"Asia/Yerevan"};
+  const reviewDue = KhnayikReminderTime.next(review,"daily-review",ms("2026-11-04T15:00Z"));
+  assert.equal(reviewDue.at,ms("2026-11-04T16:00Z"));
+  assert.equal(KhnayikReminderTime.next(review,"daily-review",reviewDue.at+1).at,ms("2026-11-05T16:00Z"));
+});
+
+test("daily notebook summary moves only unfinished one-time tasks to tomorrow", async t => {
+  const { env, sql, user } = fixture();
+  const state = {
+    scheduledTasks: [
+      {id:"todo",title:"Զանգել",date:"2026-11-04",time:"09:00",done:false,reminder:false},
+      {id:"done",title:"Գնել հաց",date:"2026-11-04",time:"09:00",done:true,reminder:false},
+    ],
+    recurringTasks: [{id:"repeat",title:"Մարզվել",time:"09:00",days:[3],doneDates:[],reminder:false,createdAt:"2026-11-01T00:00:00Z"}],
+    appearance:{dailyReviewEnabled:true,dailyReviewTime:"20:00",dailyReviewTimeZone:"Asia/Yerevan"},
+  };
+  user("100",state);
+  let body;
+  t.mock.method(globalThis,"fetch",async (_url,options) => { body=JSON.parse(options.body); return Response.json({ok:true}); });
+  await sendDueReminders(env,ms("2026-11-04T16:00:00Z"));
+  assert.match(body.text,/Օրվա ամփոփում/);
+  assert.match(body.text,/Կատարված՝ 1\/3/);
+  const saved = JSON.parse(sql.prepare("SELECT state_json FROM users WHERE tg_user_id='100'").get().state_json);
+  assert.equal(saved.scheduledTasks.find(task=>task.id==="todo").date,"2026-11-05");
+  assert.equal(saved.scheduledTasks.find(task=>task.id==="done").date,"2026-11-04");
+  assert.deepEqual(saved.recurringTasks[0].doneDates,[]);
 });
 
 test("delayed and overlapping scans isolate restored accounts, groups and device-only reminders", async t => {
