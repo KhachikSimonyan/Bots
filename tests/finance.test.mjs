@@ -204,8 +204,12 @@ test("daily notebook adds tasks, marks them done and rolls old unfinished tasks 
   assert.equal(run("state.scheduledTasks[0].date"), "2026-11-22");
   assert.equal(run("state.scheduledTasks[0].notebook"), true);
   assert.equal(run("state.appearance.dailyReviewEnabled"), true);
+  assert.equal(run("renameNotebookTask({...state.scheduledTasks[0],type:'scheduled'},'Կարդալ 20 էջ')"), true);
+  assert.equal(run("state.scheduledTasks[0].title"), "Կարդալ 20 էջ");
+  run("state.scheduledTasks.push({id:'next',title:'Գրել նամակ',date:'2026-11-22',time:'09:00',done:false,reminder:false,notebook:true,notebookOrder:Date.now()+1})");
   run("toggleTaskDone({...state.scheduledTasks[0],type:'scheduled'},true,'2026-11-22')");
   assert.equal(run("state.scheduledTasks[0].done"), true);
+  assert.equal(run("notebookTasksForDay('2026-11-22')[0].title"), "Գրել նամակ");
   run("state.scheduledTasks.unshift({id:'old',title:'Հին գործ',date:'2020-01-01',time:'09:00',done:false,reminder:false});rollOverdueNotebookTasks()");
   assert.equal(run("state.scheduledTasks[0].date"), run("getDateKey(new Date())"));
 });

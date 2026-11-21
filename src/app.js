@@ -544,6 +544,7 @@ function addNotebookTask(event) {
     reminderAt: "",
     done: false,
     notebook: true,
+    notebookOrder: Date.now(),
     createdAt: new Date().toISOString(),
   });
   if (!state.appearance.dailyReviewConfigured) {
@@ -1806,12 +1807,31 @@ function addMonthTotalRow(label, value, tone = "neutral") {
 
 function notebookTasksForDay(day) {
   const date = new Date(`${day}T12:00:00`);
-  return [
+  const items = [
     ...state.scheduledTasks.filter((task) => task.date === day).map((task) => ({ ...task, type: "scheduled" })),
     ...state.recurringTasks
       .filter((task) => day >= getDateKey(new Date(task.createdAt || Date.now())) && task.days.includes(date.getDay()))
       .map((task) => ({ ...task, type: "recurring" })),
-  ].sort(compareTasks);
+  ];
+  return items.sort((a, b) => {
+    const doneDifference = Number(isTaskDone(a, day)) - Number(isTaskDone(b, day));
+    if (doneDifference) return doneDifference;
+    const aOrder = Number.isFinite(Number(a.notebookOrder)) ? Number(a.notebookOrder) : Number.MAX_SAFE_INTEGER;
+    const bOrder = Number.isFinite(Number(b.notebookOrder)) ? Number(b.notebookOrder) : Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder || compareTasks(a, b);
+  });
+}
+
+function renameNotebookTask(task, value) {
+  const title = normalizeTitle(value);
+  if (!title) return false;
+  const list = task.type === "recurring" ? state.recurringTasks : state.scheduledTasks;
+  const item = list.find((entry) => entry.id === task.id);
+  if (!item) return false;
+  if (item.title === title) return true;
+  item.title = title;
+  task.title = title;
+  return saveState() !== false;
 }
 
 function renderNotebook() {
@@ -1833,14 +1853,43 @@ function renderNotebook() {
       const row = document.createElement("article");
       const done = isTaskDone(task, selectedNotebookDate);
       row.className = `notebook-row${done ? " is-done" : ""}`;
-      row.innerHTML = `<input type="checkbox" /><div><strong></strong><small></small></div><button type="button">Ջնջել</button>`;
-      const checkbox = row.querySelector("input");
+      row.dataset.taskId = task.id;
+      row.innerHTML = `<input class="notebook-check" type="checkbox" /><div class="notebook-row-content"><input class="notebook-row-title" maxlength="80" /><small></small></div><button class="notebook-delete" type="button">Ջնջել</button>`;
+      const checkbox = row.querySelector(".notebook-check");
       checkbox.checked = done;
       checkbox.setAttribute("aria-label", `Նշել կատարված՝ ${task.title}`);
       checkbox.addEventListener("change", () => toggleTaskDone(task, checkbox.checked, selectedNotebookDate));
-      row.querySelector("strong").textContent = task.title;
-      row.querySelector("small").textContent = task.type === "recurring" ? "Կրկնվող" : task.notebook ? "Օրվա գրառում" : task.time;
-      const deleteButton = row.querySelector("button");
+      const titleInput = row.querySelector(".notebook-row-title");
+      const meta = row.querySelector("small");
+      const metaText = task.type === "recurring" ? "Կրկնվող" : task.notebook ? "" : task.time;
+      titleInput.value = task.title;
+      titleInput.setAttribute("aria-label", `Խմբագրել՝ ${task.title}`);
+      meta.textContent = metaText;
+      meta.hidden = !metaText;
+      let titleSaveTimer;
+      titleInput.addEventListener("input", () => {
+        clearTimeout(titleSaveTimer);
+        if (normalizeTitle(titleInput.value)) titleSaveTimer = setTimeout(() => renameNotebookTask(task, titleInput.value), 600);
+      });
+      titleInput.addEventListener("blur", () => {
+        clearTimeout(titleSaveTimer);
+        if (!renameNotebookTask(task, titleInput.value)) titleInput.value = task.title;
+      });
+      titleInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          clearTimeout(titleSaveTimer);
+          if (renameNotebookTask(task, titleInput.value)) els.notebookTaskTitle.focus();
+        } else if (event.key === "Escape") {
+          clearTimeout(titleSaveTimer);
+          titleInput.value = task.title;
+          titleInput.blur();
+        } else if (event.key === "Backspace" && !titleInput.value) {
+          event.preventDefault();
+          deleteTask(task);
+        }
+      });
+      const deleteButton = row.querySelector(".notebook-delete");
       deleteButton.setAttribute("aria-label", `Ջնջել՝ ${task.title}`);
       deleteButton.addEventListener("click", () => deleteTask(task));
       els.notebookTaskList.append(row);

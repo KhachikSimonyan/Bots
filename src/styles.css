@@ -1096,7 +1096,13 @@ select:focus {
   font-weight: 800;
 }
 
-.notebook-add { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 8px; }
+.notebook-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(91,83,70,.2);
+}
 .notebook-add input {
   width: 100%;
   min-height: 46px;
@@ -1113,7 +1119,7 @@ select:focus {
   font-weight: 800;
 }
 
-.notebook-list { display: grid; gap: 4px; min-height: 42px; }
+.notebook-list { display: grid; gap: 0; min-height: 42px; }
 .notebook-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 60px;
@@ -1121,20 +1127,32 @@ select:focus {
   gap: 8px;
   min-height: 52px;
   padding: 5px 0;
+  border-radius: 10px;
+  transition: background 120ms ease;
 }
-.notebook-row input { width: 24px; height: 24px; margin: 0; accent-color: var(--green); }
-.notebook-row > div { min-width: 0; }
-.notebook-row strong {
+.notebook-row:focus-within { background: rgba(255,255,255,.58); }
+.notebook-row .notebook-check { width: 24px; height: 24px; margin: 0; accent-color: var(--green); }
+.notebook-row-content { min-width: 0; }
+.notebook-row-title {
   display: block;
+  width: 100%;
   min-width: 0;
+  min-height: 32px;
+  padding: 3px 0;
   overflow-wrap: anywhere;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
   font-family: "Segoe Print", "Comic Sans MS", cursive;
   font-size: 15px;
   line-height: 1.35;
 }
-.notebook-row.is-done strong { color: var(--muted); text-decoration: line-through 2px; }
+.notebook-row-title:focus { box-shadow: inset 0 -2px rgba(46,132,102,.28); }
+.notebook-row.is-done .notebook-row-title { color: var(--muted); text-decoration: line-through 2px; }
 .notebook-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.3; }
-.notebook-row button {
+.notebook-delete {
   width: 60px;
   min-height: 44px;
   padding: 0 7px;
@@ -1144,7 +1162,10 @@ select:focus {
   color: #a33d27;
   font-size: 11px;
   font-weight: 800;
+  opacity: .78;
 }
+.notebook-row:focus-within .notebook-delete,
+.notebook-delete:focus-visible { opacity: 1; }
 .notebook-empty { padding: 12px 4px; color: var(--muted); font-family: "Segoe Print", "Comic Sans MS", cursive; text-align: center; }
 .notebook-review-setting {
   display: grid;
