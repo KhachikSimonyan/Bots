@@ -14,6 +14,18 @@
   --shadow: 0 18px 50px rgba(54, 45, 28, 0.14);
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1084,7 +1096,7 @@ select:focus {
   font-weight: 800;
 }
 
-.notebook-add { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 8px; }
+.notebook-add { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 8px; }
 .notebook-add input {
   width: 100%;
   min-height: 46px;
@@ -1097,30 +1109,41 @@ select:focus {
   border-radius: 12px;
   background: var(--green);
   color: white;
-  font-size: 24px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .notebook-list { display: grid; gap: 4px; min-height: 42px; }
 .notebook-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) 60px;
   align-items: center;
-  gap: 9px;
-  min-height: 42px;
-  padding: 4px 2px;
+  gap: 8px;
+  min-height: 52px;
+  padding: 5px 0;
 }
-.notebook-row input { width: 20px; height: 20px; accent-color: var(--green); }
-.notebook-row strong { min-width: 0; overflow-wrap: anywhere; font-family: "Segoe Print", "Comic Sans MS", cursive; font-size: 15px; }
+.notebook-row input { width: 24px; height: 24px; margin: 0; accent-color: var(--green); }
+.notebook-row > div { min-width: 0; }
+.notebook-row strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: "Segoe Print", "Comic Sans MS", cursive;
+  font-size: 15px;
+  line-height: 1.35;
+}
 .notebook-row.is-done strong { color: var(--muted); text-decoration: line-through 2px; }
-.notebook-row small { color: var(--muted); font-size: 11px; }
+.notebook-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.3; }
 .notebook-row button {
-  width: 34px;
-  height: 34px;
+  width: 60px;
+  min-height: 44px;
+  padding: 0 7px;
   border: 0;
   border-radius: 10px;
   background: rgba(216,97,69,.12);
   color: #a33d27;
+  font-size: 11px;
+  font-weight: 800;
 }
 .notebook-empty { padding: 12px 4px; color: var(--muted); font-family: "Segoe Print", "Comic Sans MS", cursive; text-align: center; }
 .notebook-review-setting {
@@ -1131,8 +1154,10 @@ select:focus {
   border-top: 1px dashed rgba(91,83,70,.28);
 }
 .notebook-review-time { padding-inline: 4px; color: var(--ink); font-size: 13px; font-weight: 800; }
-.notebook-review-time input { width: 120px; padding: 9px 10px; }
+.notebook-review-time input { width: 96px; padding: 9px 10px; text-align: center; font-variant-numeric: tabular-nums; }
 .notebook-review-setting.is-disabled .notebook-review-time { opacity: .5; }
+.notebook-review-actions { display: flex; justify-content: flex-end; }
+.notebook-review-actions .secondary-button { min-height: 40px; padding: 8px 12px; font-size: 11px; box-shadow: none; }
 
 .task-form {
   display: grid;

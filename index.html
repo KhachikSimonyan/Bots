@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./src/styles.css?v=20261121-1" />
+    <link rel="stylesheet" href="./src/styles.css?v=20261121-2" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -463,14 +463,6 @@
       </section>
 
       <section class="app-view" id="tasksView" role="tabpanel" aria-labelledby="tasksTab">
-        <section class="task-hero">
-          <div>
-            <span>Այսօրվա բլոկնոտ</span>
-            <strong id="todayTaskCount">0 գործ</strong>
-          </div>
-          <button class="secondary-button compact" id="allowNotificationsBtn" type="button">Միացնել հիշեցումները</button>
-        </section>
-
         <section class="notebook-card" aria-labelledby="notebookTitle">
           <div class="notebook-binding" aria-hidden="true"></div>
           <div class="notebook-head">
@@ -480,25 +472,29 @@
               <small id="notebookProgress">0-ից 0 կատարված</small>
             </div>
             <div class="notebook-date-nav" aria-label="Ընտրել օրը">
-              <button id="notebookPrevDay" type="button" aria-label="Նախորդ օրը">‹</button>
+              <button id="notebookPrevDay" type="button" aria-label="Նախորդ օրը">Նախ.</button>
               <button id="notebookToday" type="button">Այսօր</button>
-              <button id="notebookNextDay" type="button" aria-label="Հաջորդ օրը">›</button>
+              <button id="notebookNextDay" type="button" aria-label="Հաջորդ օրը">Հաջ.</button>
             </div>
           </div>
           <form class="notebook-add" id="notebookTaskForm">
             <input id="notebookTaskTitle" maxlength="80" placeholder="Գրեք նոր գործը…" aria-label="Նոր գործ" required />
-            <button type="submit" aria-label="Ավելացնել գործը">＋</button>
+            <button type="submit">Ավելացնել</button>
           </form>
           <div class="notebook-list" id="notebookTaskList"></div>
           <div class="notebook-review-setting">
             <label class="toggle-row">
               <input id="dailyReviewEnabled" type="checkbox" />
-              <span>Օրվա վերջում հիշեցնել և չարվածները տեղափոխել վաղվա վրա</span>
+              <span>Օրվա ամփոփում և չարվածների տեղափոխում</span>
             </label>
             <label class="notebook-review-time">Ամփոփման ժամ
-              <input id="dailyReviewTime" type="time" step="300" value="20:00" />
+              <input id="dailyReviewTime" type="text" inputmode="numeric" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" value="20:00" placeholder="20:00" aria-label="Ամփոփման ժամը՝ 24-ժամյա ձևաչափով" />
             </label>
             <small id="dailyReviewNote">Telegram-ը կուղարկի մեկ ընդհանուր ամփոփում։</small>
+            <div class="notebook-review-actions">
+              <span id="todayTaskCount" class="visually-hidden">0 գործ</span>
+              <button class="secondary-button compact" id="allowNotificationsBtn" type="button">Միացնել սարքի հիշեցումները</button>
+            </div>
           </div>
         </section>
 
@@ -510,7 +506,7 @@
           </select>
         </label>
         <section class="voice-card">
-          <button class="voice-button" id="taskVoiceBtn" type="button" aria-pressed="false">🎙️ Ավելացնել գործ ձայնով</button>
+          <button class="voice-button" id="taskVoiceBtn" type="button" aria-pressed="false">Ձայնով ավելացնել գործ</button>
           <small id="taskVoiceStatus" role="status">Օրինակ՝ «Ավելացրու գործ՝ վաղը ժամը 15:30 զանգել բժշկին»</small>
         </section>
         <section class="card accordion-card">
@@ -615,14 +611,14 @@
         </section>
 
         <section class="card accordion-card">
-          <button class="section-toggle" data-accordion="taskList" type="button" aria-expanded="true">
+          <button class="section-toggle" data-accordion="taskList" type="button" aria-expanded="false">
             <span class="section-toggle-copy">
               <strong>Բոլոր պլանավորված գործերը</strong>
               <small id="taskCount">Դեռ գործ չկա</small>
             </span>
             <span class="section-toggle-meta">Փակել</span>
           </button>
-          <div class="accordion-panel" id="taskListPanel">
+          <div class="accordion-panel is-hidden" id="taskListPanel">
           <div class="filter-row" id="taskFilters" aria-label="Գործերի զտիչներ">
             <button class="filter-chip is-active" data-task-filter="all" type="button">Բոլորը</button>
             <button class="filter-chip" data-task-filter="done" type="button">Կատարված</button>
@@ -664,7 +660,7 @@
 <script src="./src/finance-tools.js?v=20261108-1"></script>
 <script src="./src/voice-input.js?v=20261109-2"></script>
 <script src="./src/sync.js?v=20261108-1"></script>
-<script src="./src/app.js?v=20261121-1"></script>
+<script src="./src/app.js?v=20261121-2"></script>
 
   </body>
 </html>

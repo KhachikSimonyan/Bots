@@ -43,7 +43,7 @@ const accordionState = {
   recentExpenses: false,
   months: true,
   recurringTasks: false,
-  taskList: true,
+  taskList: false,
   planIncome: false,
   categoryBudgets: false,
   savingsGoals: false,
@@ -1833,14 +1833,16 @@ function renderNotebook() {
       const row = document.createElement("article");
       const done = isTaskDone(task, selectedNotebookDate);
       row.className = `notebook-row${done ? " is-done" : ""}`;
-      row.innerHTML = `<input type="checkbox" /><div><strong></strong><small></small></div><button type="button" aria-label="Ջնջել">×</button>`;
+      row.innerHTML = `<input type="checkbox" /><div><strong></strong><small></small></div><button type="button">Ջնջել</button>`;
       const checkbox = row.querySelector("input");
       checkbox.checked = done;
       checkbox.setAttribute("aria-label", `Նշել կատարված՝ ${task.title}`);
       checkbox.addEventListener("change", () => toggleTaskDone(task, checkbox.checked, selectedNotebookDate));
       row.querySelector("strong").textContent = task.title;
       row.querySelector("small").textContent = task.type === "recurring" ? "Կրկնվող" : task.notebook ? "Օրվա գրառում" : task.time;
-      row.querySelector("button").addEventListener("click", () => deleteTask(task));
+      const deleteButton = row.querySelector("button");
+      deleteButton.setAttribute("aria-label", `Ջնջել՝ ${task.title}`);
+      deleteButton.addEventListener("click", () => deleteTask(task));
       els.notebookTaskList.append(row);
     });
   }
@@ -1851,7 +1853,7 @@ function renderNotebook() {
   els.dailyReviewTime.disabled = !reviewEnabled;
   els.dailyReviewTime.closest?.(".notebook-review-setting")?.classList.toggle("is-disabled", !reviewEnabled);
   els.dailyReviewNote.textContent = reviewEnabled
-    ? `Ամեն օր ${reviewTime}-ին Telegram-ը կամ ընտրված ալիքը կամփոփի օրը և չարվածները կտեղափոխի վաղվա էջ։`
+    ? `Ամեն օր ${reviewTime}-ին կստանաք ամփոփում, իսկ չարվածները կանցնեն վաղվա էջ։`
     : "Միացրեք՝ օրվա վերջում ամփոփում ստանալու համար։";
 }
 
